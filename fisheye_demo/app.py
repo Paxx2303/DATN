@@ -187,8 +187,13 @@ def utc_now_iso_from_timestamp(timestamp: float) -> str:
 
 def pil_to_b64(image: Image.Image, fmt: str = "JPEG", quality: int = 92) -> str:
     buffer = io.BytesIO()
-    image.save(buffer, format=fmt, quality=quality)
-    return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
+    _fmt = fmt.upper()
+    save_kwargs: dict[str, Any] = {"format": _fmt}
+    if _fmt in {"JPEG", "WEBP"}:
+        save_kwargs["quality"] = quality
+    image.save(buffer, **save_kwargs)
+    mime = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp", "BMP": "image/bmp"}.get(_fmt, "image/jpeg")
+    return f"data:{mime};base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
 def pil_to_jpeg_bytes(image: Image.Image, quality: int = 90) -> bytes:
@@ -1763,6 +1768,7 @@ class ExternalCameraLiveMonitor:
         self._thread: threading.Thread | None = None
         self._stream_frames: dict[str, bytes] = {}
         self._stream_frame_id = 0
+        self._session_id: str | None = None
         self._state: dict[str, Any] = {
             "running": False,
             "status": "idle",
@@ -1854,6 +1860,7 @@ class ExternalCameraLiveMonitor:
             )
             self._stream_frames = {}
             self._stream_frame_id = 0
+            self._session_id = uuid.uuid4().hex
             worker = threading.Thread(
                 target=self._worker_loop,
                 kwargs={
@@ -1887,6 +1894,17 @@ class ExternalCameraLiveMonitor:
                 preprocessing.get("full_frame"),
             )
             worker.start()
+
+            # Tạo live session record trong DB
+            try:
+                try:
+                    from db import insert_live_session
+                except ImportError:
+                    from fisheye_demo.db import insert_live_session
+                insert_live_session(self._session_id, source_url, source_mode, conf_threshold, iou_threshold)
+            except Exception:
+                pass
+
             return json.loads(json.dumps(self._state))
 
     def stop(self) -> dict[str, Any]:
@@ -1916,6 +1934,21 @@ class ExternalCameraLiveMonitor:
                 self._state.get("last_updated_at"),
                 self._state.get("error"),
             )
+            session_id_to_close = self._session_id
+            self._session_id = None
+
+        # Đóng live session trong DB ngoài lock để tránh deadlock
+        if session_id_to_close:
+            try:
+                try:
+                    from db import close_live_session
+                except ImportError:
+                    from fisheye_demo.db import close_live_session
+                close_live_session(session_id_to_close)
+            except Exception:
+                pass
+
+        with self._lock:
             return json.loads(json.dumps(self._state))
 
     def _worker_loop(
@@ -2114,10 +2147,9 @@ class ExternalCameraLiveMonitor:
             except ImportError:
                 from fisheye_demo.db import upsert_traffic_counts, update_live_session
             upsert_traffic_counts(class_counts, camera_source="live_camera")
-            session_id = self._state.get("started_at", "")
-            if session_id:
+            if self._session_id:
                 update_live_session(
-                    session_id,
+                    self._session_id,
                     cycle_count=next_cycle_count,
                     total_objects=total_objects,
                     class_counts=class_counts,
@@ -2180,6 +2212,15 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
     recent_image_store = RecentImageStore(settings.recent_image_db_path, settings.recent_image_limit)
     backfill_recent_image_store(settings, recent_image_store)
     live_monitor = ExternalCameraLiveMonitor(settings, registry, recent_image_store)
+
+    try:
+        from job_queue import VideoJobQueue
+    except ImportError:
+        from fisheye_demo.job_queue import VideoJobQueue
+
+    _max_video_workers = int(os.getenv("FISHEYE_VIDEO_WORKERS", "2"))
+    _max_video_queue = int(os.getenv("FISHEYE_VIDEO_QUEUE_SIZE", "10"))
+    job_queue = VideoJobQueue(max_workers=_max_video_workers, max_queue_size=_max_video_queue)
 
     # ── Extended modules (DB, GCS, Analytics, Alerts) ────────────────────────
     try:
@@ -2250,6 +2291,17 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
         _alert_manager = None
         _line_counter = None
 
+    # ── Incident Detector ─────────────────────────────────────────────────────
+    try:
+        try:
+            from incident_detector import Incident_Detector as _IncidentDetectorClass
+        except ImportError:
+            from fisheye_demo.incident_detector import Incident_Detector as _IncidentDetectorClass
+        _incident_detector_available = True
+    except Exception:
+        _IncidentDetectorClass = None  # type: ignore[assignment, misc]
+        _incident_detector_available = False
+
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = settings.max_upload_mb * 1024 * 1024
     app.config.update(config_overrides)
@@ -2262,6 +2314,7 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
     app.extensions["fisheye_density_analyzer"] = _density_analyzer
     app.extensions["fisheye_alert_manager"] = _alert_manager
     app.extensions["fisheye_line_counter"] = _line_counter
+    app.extensions["fisheye_job_queue"] = job_queue
 
     @app.get("/")
     def index():
@@ -2345,18 +2398,76 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
     @app.get("/api/health")
     def api_health():
         history_items = list_records(settings.results_dir, settings.history_limit)
+
+        # ── DB health ─────────────────────────────────────────────────────────
+        db_status: dict[str, Any] = {"status": "disabled"}
+        if app.extensions.get("fisheye_extended_enabled"):
+            try:
+                try:
+                    from db import get_dashboard_stats
+                except ImportError:
+                    from fisheye_demo.db import get_dashboard_stats
+                get_dashboard_stats(hours=1)
+                db_status = {"status": "ok"}
+            except Exception as _db_exc:
+                db_status = {"status": "error", "detail": str(_db_exc)[:120]}
+
+        # ── GCS health ────────────────────────────────────────────────────────
+        gcs_status: dict[str, Any] = {"status": "disabled"}
+        if app.extensions.get("fisheye_extended_enabled"):
+            try:
+                try:
+                    from cloud_storage import is_enabled as _gcs_is_enabled, get_bucket_stats as _gcs_bucket_stats
+                except ImportError:
+                    from fisheye_demo.cloud_storage import is_enabled as _gcs_is_enabled, get_bucket_stats as _gcs_bucket_stats
+                if _gcs_is_enabled():
+                    _stats = _gcs_bucket_stats()
+                    gcs_status = {"status": "ok", "object_count": _stats.get("object_count", 0)}
+                else:
+                    gcs_status = {"status": "not_configured"}
+            except Exception as _gcs_exc:
+                gcs_status = {"status": "error", "detail": str(_gcs_exc)[:120]}
+
+        # ── Disk health ───────────────────────────────────────────────────────
+        upload_dir = Path(settings.upload_dir)
+        results_dir = Path(settings.results_dir)
+        disk_status: dict[str, Any] = {
+            "upload_dir_exists": upload_dir.is_dir(),
+            "results_dir_exists": results_dir.is_dir(),
+        }
+        try:
+            _st = shutil.disk_usage(str(results_dir if results_dir.is_dir() else Path(".")))
+            disk_status["free_gb"] = round(_st.free / 1e9, 2)
+            disk_status["total_gb"] = round(_st.total / 1e9, 2)
+            disk_status["used_pct"] = round((_st.used / _st.total) * 100, 1)
+        except Exception:
+            pass
+
+        # ── Job queue health ──────────────────────────────────────────────────
+        _jq: VideoJobQueue = app.extensions["fisheye_job_queue"]
+        job_stats = _jq.stats()
+
+        overall = "ok"
+        if db_status.get("status") == "error" or gcs_status.get("status") == "error":
+            overall = "degraded"
+
         return jsonify(
             {
-                "status": "ok",
+                "status": overall,
                 "server_time": utc_now_iso(),
                 "model": registry.status_snapshot(),
                 "storage": {
                     "upload_dir": str(settings.upload_dir),
                     "results_dir": str(settings.results_dir),
                     "recent_runs": len(history_items),
+                    "disk": disk_status,
                 },
+                "db": db_status,
+                "gcs": gcs_status,
+                "job_queue": job_stats,
                 "recent_image_store": recent_image_store.stats(),
                 "device": settings.device,
+                "incident_detector": {"available": _incident_detector_available},
             }
         )
 
@@ -2521,9 +2632,11 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
     @app.get("/api/external-camera/live/stream")
     def api_external_camera_live_stream():
         requested_view = str(request.args.get("view") or "overview").strip().lower()
-        allowed_views = {"overview", "camera_1"}
+        # Allow "overview" + "camera_N" for N = 1..8 (max camera_limit)
+        _max_cameras = settings.external_camera_limit
+        allowed_views = {"overview"} | {f"camera_{i}" for i in range(1, _max_cameras + 1)}
         if requested_view not in allowed_views:
-            return jsonify({"error": "Unsupported stream view"}), 400
+            return jsonify({"error": f"Unsupported stream view. Allowed: {sorted(allowed_views)}"}), 400
 
         placeholder = build_placeholder_jpeg("Waiting for live detect frame...")
         client_id = uuid.uuid4().hex[:8]
@@ -2656,11 +2769,11 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
             default_source_layout="normal",
             profile="external_camera",
         )
-        model_key = get_requested_model_key(request.form, registry)
-        source_config = get_external_camera_source_config(request.form, settings)
         camera_limit = max(1, min(8, int(request.form.get("camera_limit") or settings.external_camera_limit)))
 
         try:
+            model_key = get_requested_model_key(request.form, registry)
+            source_config = get_external_camera_source_config(request.form, settings)
             payload = run_external_camera_pipeline(
                 registry,
                 settings,
@@ -2709,14 +2822,17 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
             conf_threshold = get_request_float(request.form, ("conf", "confidence"), 0.01, 0.99, settings.default_conf)
             iou_threshold = get_request_float(request.form, ("iou",), 0.05, 0.95, settings.default_iou)
             preprocessing = build_preprocessing_options(request.form, settings)
-            model_key = get_requested_model_key(request.form, registry)
 
             temp_input = None
-            result_dir = None
             try:
+                model_key = get_requested_model_key(request.form, registry)
+                target_video_fps = get_video_target_detect_fps(request.form)
+
+                # Lưu file lên disk ngay trong request (stream không thể đọc sau khi response)
                 temp_input = save_uploaded_file(settings, file, suffix)
                 duration_info = inspect_video_duration(temp_input)
                 if duration_info["duration_seconds"] > settings.max_video_seconds:
+                    temp_input.unlink(missing_ok=True)
                     return jsonify(
                         {
                             "error": (
@@ -2726,65 +2842,129 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
                         }
                     ), 400
 
-                result_id, result_dir = create_result_dir(settings)
-                annotated_video_path = result_dir / "annotated.mp4"
-                preview_path = result_dir / "preview_annotated.jpg"
-                model, model_info = registry.load(model_key)
-                target_video_fps = get_video_target_detect_fps(request.form)
-                video_summary = run_video_detect(
-                    input_path=str(temp_input),
-                    output_path=str(annotated_video_path),
-                    model=model,
-                    conf=conf_threshold,
-                    iou=iou_threshold,
-                    device=settings.device,
-                    apply_fisheye_transform=preprocessing["enabled"],
-                    fisheye_strength=preprocessing["strength"],
-                    fisheye_radius=preprocessing["radius"],
-                    fisheye_effect=preprocessing["effect"],
-                    preview_path=str(preview_path),
-                    name_map=NAME_MAP,
-                    allowed_classes=set(CLASS_NAMES),
-                    filter_allowed_classes=(
-                        model_info["source"] == "fallback" and settings.filter_fallback_to_supported_classes
-                    ),
-                    target_detect_fps=target_video_fps,
-                )
-                record = save_video_detection_record(
-                    settings,
-                    recent_image_store,
-                    file.filename,
+                original_filename = file.filename
+
+                def _video_job(
+                    _temp_input: Path,
+                    _original_filename: str,
+                    _preprocessing: dict[str, Any],
+                    _conf: float,
+                    _iou: float,
+                    _model_key: str | None,
+                    _target_fps: float | None,
+                ) -> dict[str, Any]:
+                    _result_dir = None
+                    try:
+                        _result_id, _result_dir = create_result_dir(settings)
+                        _annotated_path = _result_dir / "annotated.mp4"
+                        _preview_path = _result_dir / "preview_annotated.jpg"
+                        _model, _model_info = registry.load(_model_key)
+
+                        # Instantiate per-job incident detector (not shared between jobs)
+                        _inc_det = None
+                        if _incident_detector_available and _IncidentDetectorClass is not None:
+                            try:
+                                _inc_det = _IncidentDetectorClass(
+                                    results_dir=str(_result_dir),
+                                )
+                            except Exception:
+                                _inc_det = None
+
+                        _summary = run_video_detect(
+                            input_path=str(_temp_input),
+                            output_path=str(_annotated_path),
+                            model=_model,
+                            conf=_conf,
+                            iou=_iou,
+                            device=settings.device,
+                            apply_fisheye_transform=_preprocessing["enabled"],
+                            fisheye_strength=_preprocessing["strength"],
+                            fisheye_radius=_preprocessing["radius"],
+                            fisheye_effect=_preprocessing["effect"],
+                            preview_path=str(_preview_path),
+                            name_map=NAME_MAP,
+                            allowed_classes=set(CLASS_NAMES),
+                            filter_allowed_classes=(
+                                _model_info["source"] == "fallback"
+                                and settings.filter_fallback_to_supported_classes
+                            ),
+                            target_detect_fps=_target_fps,
+                            incident_detector=_inc_det,
+                            incident_camera_id=f"upload_{_result_id}",
+                        )
+                        _record = save_video_detection_record(
+                            settings,
+                            recent_image_store,
+                            _original_filename,
+                            _preprocessing,
+                            _conf,
+                            _iou,
+                            _model_info,
+                            _summary,
+                            _result_dir,
+                        )
+                        _record["artifact_urls"] = build_artifact_urls(_record)
+                        return {
+                            "request_id": _record["id"],
+                            "task": "detect",
+                            "media_type": "video",
+                            "summary": _summary,
+                            "model": _record["model"],
+                            "preprocessing": _preprocessing,
+                            "record": _record,
+                        }
+                    except Exception:
+                        if _result_dir and _result_dir.exists():
+                            shutil.rmtree(_result_dir, ignore_errors=True)
+                        raise
+                    finally:
+                        _temp_input.unlink(missing_ok=True)
+
+                _queue: VideoJobQueue = app.extensions["fisheye_job_queue"]
+                job_id = _queue.submit(
+                    _video_job,
+                    temp_input,
+                    original_filename,
                     preprocessing,
                     conf_threshold,
                     iou_threshold,
-                    model_info,
-                    video_summary,
-                    result_dir,
+                    model_key,
+                    target_video_fps,
+                    job_type="video_detect",
+                    meta={
+                        "filename": original_filename,
+                        "duration_seconds": round(duration_info["duration_seconds"], 1),
+                    },
                 )
+                # temp_input ownership transferred to job — do not delete here
+                temp_input = None
+
             except ValueError as exc:
-                if result_dir and result_dir.exists():
-                    shutil.rmtree(result_dir, ignore_errors=True)
-                return jsonify({"error": str(exc)}), 400
-            except Exception as exc:
-                if result_dir and result_dir.exists():
-                    shutil.rmtree(result_dir, ignore_errors=True)
-                return jsonify({"error": str(exc)}), 500
-            finally:
                 if temp_input and temp_input.exists():
                     temp_input.unlink(missing_ok=True)
+                return jsonify({"error": str(exc)}), 400
+            except RuntimeError as exc:
+                if temp_input and temp_input.exists():
+                    temp_input.unlink(missing_ok=True)
+                return jsonify({"error": str(exc)}), 503
+            except Exception as exc:
+                if temp_input and temp_input.exists():
+                    temp_input.unlink(missing_ok=True)
+                return jsonify({"error": str(exc)}), 500
 
-            record["artifact_urls"] = build_artifact_urls(record)
             return jsonify(
                 {
-                    "request_id": record["id"],
+                    "job_id": job_id,
+                    "status": "pending",
                     "task": "detect",
                     "media_type": "video",
-                    "summary": video_summary,
-                    "model": record["model"],
-                    "preprocessing": preprocessing,
-                    "record": record,
+                    "poll_url": f"/api/jobs/{job_id}",
+                    "meta": {
+                        "filename": original_filename,
+                        "duration_seconds": round(duration_info["duration_seconds"], 1),
+                    },
                 }
-            )
+            ), 202
 
         if suffix not in ALLOWED_IMAGE_EXTENSIONS:
             return jsonify({"error": f"Unsupported image file type: {suffix or 'unknown'}"}), 400
@@ -2792,9 +2972,9 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
         conf_threshold = get_request_float(request.form, ("conf", "confidence"), 0.01, 0.99, settings.default_conf)
         iou_threshold = get_request_float(request.form, ("iou",), 0.05, 0.95, settings.default_iou)
         preprocessing = build_preprocessing_options(request.form, settings)
-        model_key = get_requested_model_key(request.form, registry)
 
         try:
+            model_key = get_requested_model_key(request.form, registry)
             original_image = read_uploaded_image(file)
             preprocessed_image = apply_preprocessing(original_image, preprocessing)
             annotated_image, detections, class_counts, inference_ms, model_info = run_inference(
@@ -2865,6 +3045,56 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
                 "gcs_urls": record.get("gcs_urls", {}),
             }
         )
+
+    # ── Async job polling endpoints ───────────────────────────────────────────
+
+    @app.get("/api/jobs/<job_id>")
+    def api_job_status(job_id: str):
+        """Poll status of an async video processing job."""
+        _queue: VideoJobQueue = app.extensions["fisheye_job_queue"]
+        job = _queue.get(job_id)
+        if job is None:
+            return jsonify({"error": "Job not found"}), 404
+
+        resp: dict[str, Any] = {
+            "job_id": job["job_id"],
+            "status": job["status"],
+            "job_type": job["job_type"],
+            "created_at": job["created_at"],
+            "started_at": job["started_at"],
+            "finished_at": job["finished_at"],
+            "meta": job.get("meta", {}),
+        }
+
+        if job["status"] == "done":
+            resp["result"] = job.get("result")
+        elif job["status"] == "failed":
+            resp["error"] = job.get("error")
+
+        return jsonify(resp)
+
+    @app.get("/api/jobs")
+    def api_jobs_list():
+        """List recent async jobs (without full result payload)."""
+        _queue: VideoJobQueue = app.extensions["fisheye_job_queue"]
+        limit = min(int(request.args.get("limit", 20)), 100)
+        return jsonify(
+            {
+                "jobs": _queue.list_recent(limit=limit),
+                "stats": _queue.stats(),
+            }
+        )
+
+    @app.delete("/api/jobs/<job_id>")
+    def api_job_cancel(job_id: str):
+        """Cancel a pending job."""
+        _queue: VideoJobQueue = app.extensions["fisheye_job_queue"]
+        if _queue.get(job_id) is None:
+            return jsonify({"error": "Job not found"}), 404
+        cancelled = _queue.cancel(job_id)
+        if cancelled:
+            return jsonify({"job_id": job_id, "status": "cancelled"})
+        return jsonify({"error": "Job cannot be cancelled (not in pending state)"}), 409
 
     @app.post("/api/convert")
     def api_convert():

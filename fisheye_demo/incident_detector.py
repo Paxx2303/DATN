@@ -464,7 +464,15 @@ class Wrong_Way_Detector:
 
 
 class Fallen_Object_Detector:
-    """Bộ phát hiện chướng ngại vật rơi vỡ trên đường."""
+    """Bộ phát hiện chướng ngại vật rơi vỡ trên đường.
+
+    NOTE: Detector này chỉ hoạt động khi model YOLO có thêm class vật thể
+    (debris, cone, box, ...) ngoài 5 class mặc định (Car, Bus, Truck,
+    Pedestrian, Motorbike). Với model FishEye8K hiện tại, hàm analyze()
+    sẽ luôn trả về danh sách rỗng vì tất cả detections đều là vehicle/pedestrian.
+    Để kích hoạt: train/fine-tune model với class bổ sung rồi cập nhật
+    VEHICLE_CLASSES và bổ sung class mới vào NAME_MAP trong app.py.
+    """
     def __init__(self) -> None:
         self.object_starts: dict[str, float] = {}
 
@@ -673,8 +681,9 @@ class Traffic_Pattern_Analyzer:
             if len(recent_headings) >= 6:
                 direction_changes = 0
                 for idx in range(1, len(recent_headings) - 1):
-                    diff1 = (recent_headings[idx] - recent_headings[idx - 1]) % 360
-                    diff2 = (recent_headings[idx + 1] - recent_headings[idx]) % 360
+                    # Normalize to [-180, 180] so that sign indicates turn direction
+                    diff1 = ((recent_headings[idx] - recent_headings[idx - 1] + 180) % 360) - 180
+                    diff2 = ((recent_headings[idx + 1] - recent_headings[idx] + 180) % 360) - 180
                     if (diff1 > 15 and diff2 < -15) or (diff1 < -15 and diff2 > 15):
                         direction_changes += 1
 

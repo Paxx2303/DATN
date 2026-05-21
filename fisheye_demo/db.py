@@ -352,16 +352,22 @@ CREATE TABLE IF NOT EXISTS incident_configs (
 
 def _create_schema() -> None:
     schema = _SCHEMA_POSTGRES if _backend == "postgres" else _SCHEMA_SQLITE
+    _IGNORABLE_ERRORS = ("already exists",)
     with get_conn() as conn:
         cur = conn.cursor()
-        # Tách từng statement và chạy riêng
         for stmt in schema.split(";"):
             stmt = stmt.strip()
-            if stmt:
-                try:
-                    cur.execute(stmt)
-                except Exception as exc:
-                    logger.debug("Schema stmt skipped: %s — %s", stmt[:60], exc)
+            if not stmt:
+                continue
+            try:
+                cur.execute(stmt)
+            except Exception as exc:
+                exc_msg = str(exc).lower()
+                # IF NOT EXISTS statements can still raise on some backends — ignore those
+                if any(token in exc_msg for token in _IGNORABLE_ERRORS):
+                    logger.debug("Schema stmt skipped (already exists): %s", stmt[:60])
+                else:
+                    logger.warning("Schema stmt failed: %s — %s", stmt[:80], exc)
     logger.info("DB schema ready (backend=%s)", _backend)
 
 
@@ -487,34 +493,34 @@ def get_traffic_counts_by_hour(
     camera_source: str | None = None,
 ) -> list[dict[str, Any]]:
     """Lấy thống kê đếm xe theo giờ trong N giờ gần nhất."""
+    from datetime import timedelta
+    cutoff_str = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
     if _backend == "postgres":
         if camera_source:
             sql = """
                 SELECT hour_bucket, camera_source, class_name, count
                 FROM traffic_counts
-                WHERE hour_bucket >= NOW() - INTERVAL '%s hours'
+                WHERE hour_bucket >= %s
                   AND camera_source = %s
                 ORDER BY hour_bucket DESC, class_name
             """
-            params: tuple = (hours, camera_source)
+            params: tuple = (cutoff_str, camera_source)
         else:
             sql = """
                 SELECT hour_bucket, camera_source, class_name, count
                 FROM traffic_counts
-                WHERE hour_bucket >= NOW() - INTERVAL '%s hours'
+                WHERE hour_bucket >= %s
                 ORDER BY hour_bucket DESC, class_name
             """
-            params = (hours,)
+            params = (cutoff_str,)
     else:
-        # SQLite: tính cutoff thủ công
-        from datetime import timedelta
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
         if camera_source:
             sql = "SELECT hour_bucket, camera_source, class_name, count FROM traffic_counts WHERE hour_bucket >= ? AND camera_source = ? ORDER BY hour_bucket DESC, class_name"
-            params = (cutoff, camera_source)
+            params = (cutoff_str, camera_source)
         else:
             sql = "SELECT hour_bucket, camera_source, class_name, count FROM traffic_counts WHERE hour_bucket >= ? ORDER BY hour_bucket DESC, class_name"
-            params = (cutoff,)
+            params = (cutoff_str,)
 
     with get_conn() as conn:
         cur = conn.cursor()
@@ -894,16 +900,16 @@ def count_incidents(
 
 def get_incident_stats(hours: int = 24) -> dict[str, Any]:
     """Thống kê chi tiết về các sự cố."""
+    from datetime import timedelta
+    cutoff_str = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
     if _backend == "postgres":
-        cutoff = f"NOW() - INTERVAL '{hours} hours'"
-        sql_total = f"SELECT COUNT(*) FROM incidents WHERE timestamp >= {cutoff}"
-        sql_by_type = f"SELECT type, COUNT(*) FROM incidents WHERE timestamp >= {cutoff} GROUP BY type"
-        sql_by_severity = f"SELECT severity, COUNT(*) FROM incidents WHERE timestamp >= {cutoff} GROUP BY severity"
-        sql_by_state = f"SELECT state, COUNT(*) FROM incidents WHERE timestamp >= {cutoff} GROUP BY state"
-        params = ()
+        sql_total = "SELECT COUNT(*) FROM incidents WHERE timestamp >= %s"
+        sql_by_type = "SELECT type, COUNT(*) FROM incidents WHERE timestamp >= %s GROUP BY type"
+        sql_by_severity = "SELECT severity, COUNT(*) FROM incidents WHERE timestamp >= %s GROUP BY severity"
+        sql_by_state = "SELECT state, COUNT(*) FROM incidents WHERE timestamp >= %s GROUP BY state"
+        params: tuple = (cutoff_str,)
     else:
-        from datetime import timedelta
-        cutoff_str = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
         sql_total = "SELECT COUNT(*) FROM incidents WHERE timestamp >= ?"
         sql_by_type = "SELECT type, COUNT(*) FROM incidents WHERE timestamp >= ? GROUP BY type"
         sql_by_severity = "SELECT severity, COUNT(*) FROM incidents WHERE timestamp >= ? GROUP BY severity"
@@ -997,18 +1003,12 @@ def get_dashboard_stats(hours: int = 24) -> dict[str, Any]:
     unack_alerts = len(list_alerts(limit=100, unacknowledged_only=True))
 
     # Avg inference ms từ detections gần nhất
-    sql = _adapt_sql(
+    from datetime import timedelta
+    cutoff_str = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    sql_avg = _adapt_sql(
         "SELECT AVG(inference_ms) FROM detections WHERE inference_ms IS NOT NULL AND task='detect' AND created_at >= %s"
     )
-    if _backend == "postgres":
-        cutoff = f"NOW() - INTERVAL '{hours} hours'"
-        sql_avg = f"SELECT AVG(inference_ms) FROM detections WHERE inference_ms IS NOT NULL AND task='detect' AND created_at >= {cutoff}"
-        params: tuple = ()
-    else:
-        from datetime import timedelta
-        cutoff_str = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
-        sql_avg = "SELECT AVG(inference_ms) FROM detections WHERE inference_ms IS NOT NULL AND task='detect' AND created_at >= ?"
-        params = (cutoff_str,)
+    params: tuple = (cutoff_str,)
 
     with get_conn() as conn:
         cur = conn.cursor()

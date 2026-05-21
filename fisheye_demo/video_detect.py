@@ -113,6 +113,9 @@ def run_video_detect(
     speed_limit_kmh: float = 60.0,
     enable_congestion_detection: bool = False,
     congestion_capacity: int = 15,
+    # ── Incident detection ────────────────────────────────────────────────────
+    incident_detector: Any | None = None,
+    incident_camera_id: str = "video_upload",
 ) -> dict[str, Any]:
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
@@ -152,6 +155,10 @@ def run_video_detect(
     # ── Traffic feature instances ─────────────────────────────────────────────
     speed_est: SpeedEstimator | None = None
     congestion_det: CongestionDetector | None = None
+
+    # ── Incident tracking ─────────────────────────────────────────────────────
+    all_incidents: list[dict[str, Any]] = []
+    incident_counts: dict[str, int] = {}
 
     if _TRAFFIC_FEATURES_AVAILABLE:
         if enable_speed_estimation:
@@ -251,6 +258,24 @@ def run_video_detect(
                         annotated_frame, cong_result, width, height,
                     )
 
+                # Incident detection
+                if incident_detector is not None:
+                    try:
+                        frame_rgb_for_inc = cv2.cvtColor(inference_frame, cv2.COLOR_BGR2RGB)
+                        new_incidents = incident_detector.process_frame(
+                            frame_dets,
+                            frame_rgb_for_inc,
+                            incident_camera_id,
+                            width,
+                            height,
+                        )
+                        for inc in new_incidents:
+                            all_incidents.append(inc)
+                            inc_type = inc.get("type", "unknown")
+                            incident_counts[inc_type] = incident_counts.get(inc_type, 0) + 1
+                    except Exception:
+                        pass
+
             if frame_count == 0:
                 first_annotated_frame = annotated_frame.copy()
 
@@ -300,5 +325,14 @@ def run_video_detect(
         summary["speed_stats"] = speed_est.get_stats()
     if congestion_det is not None:
         summary["congestion_stats"] = congestion_det.get_status()
+
+    # ── Incident stats ────────────────────────────────────────────────────────
+    if incident_detector is not None:
+        summary["incident_counts"] = incident_counts
+        summary["total_incidents"] = sum(incident_counts.values())
+        summary["incidents"] = [
+            {k: v for k, v in inc.items() if k not in ("frame_rgb",)}
+            for inc in all_incidents
+        ]
 
     return summary
