@@ -42,7 +42,14 @@ def _get_database_url() -> str | None:
 
 
 def _get_sqlite_fallback_path() -> str:
-    return os.getenv("FISHEYE_SQLITE_DB", "fisheye_demo/fisheye.db")
+    # Try relative path first, then absolute path
+    default_path = os.getenv("FISHEYE_SQLITE_DB", "fisheye.db")
+    if not os.path.exists(default_path) and not default_path.startswith("/"):
+        # Try with fisheye_demo prefix
+        alt_path = f"fisheye_demo/{default_path}"
+        if os.path.exists(alt_path):
+            return alt_path
+    return default_path
 
 
 def init_db(*, force: bool = False) -> str:
@@ -212,6 +219,34 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alerts_acknowledged ON alerts(acknowledged);
+
+CREATE TABLE IF NOT EXISTS incidents (
+    id              TEXT PRIMARY KEY,
+    type            TEXT NOT NULL,
+    severity        TEXT NOT NULL,
+    confidence      REAL NOT NULL,
+    camera_id       TEXT NOT NULL,
+    timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    location        JSONB,
+    state           TEXT NOT NULL DEFAULT 'active',
+    duration        REAL DEFAULT 0.0,
+    metadata        JSONB,
+    video_url       TEXT,
+    thumbnail_url   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_incidents_timestamp ON incidents(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_incidents_camera_id ON incidents(camera_id);
+CREATE INDEX IF NOT EXISTS idx_incidents_type ON incidents(type);
+CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incidents(severity);
+
+CREATE TABLE IF NOT EXISTS incident_configs (
+    camera_id       TEXT NOT NULL DEFAULT 'default',
+    configs         JSONB NOT NULL,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    user_id         TEXT,
+    PRIMARY KEY (camera_id)
+);
 """
 
 _SCHEMA_SQLITE = """
@@ -286,6 +321,32 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS incidents (
+    id              TEXT PRIMARY KEY,
+    type            TEXT NOT NULL,
+    severity        TEXT NOT NULL,
+    confidence      REAL NOT NULL,
+    camera_id       TEXT NOT NULL,
+    timestamp       TEXT NOT NULL,
+    location        TEXT,
+    state           TEXT NOT NULL DEFAULT 'active',
+    duration        REAL DEFAULT 0.0,
+    metadata        TEXT,
+    video_url       TEXT,
+    thumbnail_url   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_incidents_timestamp ON incidents(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_incidents_camera_id ON incidents(camera_id);
+
+CREATE TABLE IF NOT EXISTS incident_configs (
+    camera_id       TEXT NOT NULL DEFAULT 'default',
+    configs         TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    user_id         TEXT,
+    PRIMARY KEY (camera_id)
+);
 """
 
 
@@ -668,6 +729,263 @@ def acknowledge_alert(alert_id: int) -> None:
         conn.cursor().execute(sql, (alert_id,))
 
 
+# ── Incidents & Incident Configs ──────────────────────────────────────────────
+
+def insert_incident(record: dict[str, Any]) -> None:
+    """Lưu một incident record vào DB."""
+    # Ensure database is initialized
+    if _backend == "none":
+        init_db()
+    
+    sql = _adapt_sql("""
+        INSERT INTO incidents
+            (id, type, severity, confidence, camera_id, timestamp,
+             location, state, duration, metadata, video_url, thumbnail_url)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT(id) DO NOTHING
+    """)
+    params = (
+        record.get("id"),
+        record.get("type"),
+        record.get("severity"),
+        record.get("confidence"),
+        record.get("camera_id"),
+        record.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+        json.dumps(record.get("location") or {}),
+        record.get("state", "active"),
+        record.get("duration", 0.0),
+        json.dumps(record.get("metadata") or {}),
+        record.get("video_url"),
+        record.get("thumbnail_url"),
+    )
+    with get_conn() as conn:
+        conn.cursor().execute(sql, params)
+
+
+def update_incident_state(
+    incident_id: str,
+    state: str,
+    duration: float = 0.0,
+    video_url: str | None = None,
+    thumbnail_url: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Cập nhật state và duration, metadata của một incident."""
+    # Ensure database is initialized
+    if _backend == "none":
+        init_db()
+        
+    if metadata is not None:
+        sql = _adapt_sql("""
+            UPDATE incidents
+            SET state=%s, duration=%s, video_url=COALESCE(%s, video_url), thumbnail_url=COALESCE(%s, thumbnail_url), metadata=%s
+            WHERE id=%s
+        """)
+        params = (state, duration, video_url, thumbnail_url, json.dumps(metadata), incident_id)
+    else:
+        sql = _adapt_sql("""
+            UPDATE incidents
+            SET state=%s, duration=%s, video_url=COALESCE(%s, video_url), thumbnail_url=COALESCE(%s, thumbnail_url)
+            WHERE id=%s
+        """)
+        params = (state, duration, video_url, thumbnail_url, incident_id)
+    with get_conn() as conn:
+        conn.cursor().execute(sql, params)
+
+
+def get_incident(incident_id: str) -> dict[str, Any] | None:
+    # Ensure database is initialized
+    if _backend == "none":
+        init_db()
+        
+    sql = _adapt_sql("SELECT * FROM incidents WHERE id=%s")
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (incident_id,))
+        row = cur.fetchone()
+    return _row_to_dict(row) if row else None
+
+
+def list_incidents(
+    limit: int = 50,
+    offset: int = 0,
+    camera_id: str | None = None,
+    type: str | None = None,
+    severity: str | None = None,
+    state: str | None = None,
+    time_start: str | None = None,
+    time_end: str | None = None,
+) -> list[dict[str, Any]]:
+    """Lấy danh sách incidents có lọc."""
+    conditions = []
+    params = []
+
+    if camera_id:
+        conditions.append("camera_id = %s")
+        params.append(camera_id)
+    if type:
+        conditions.append("type = %s")
+        params.append(type)
+    if severity:
+        conditions.append("severity = %s")
+        params.append(severity)
+    if state:
+        conditions.append("state = %s")
+        params.append(state)
+    if time_start:
+        conditions.append("timestamp >= %s")
+        params.append(time_start)
+    if time_end:
+        conditions.append("timestamp <= %s")
+        params.append(time_end)
+
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+    sql = _adapt_sql(
+        f"SELECT * FROM incidents{where_clause} ORDER BY timestamp DESC LIMIT %s OFFSET %s"
+    )
+    params.extend([limit, offset])
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, tuple(params))
+        rows = cur.fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
+def count_incidents(
+    camera_id: str | None = None,
+    type: str | None = None,
+    severity: str | None = None,
+    state: str | None = None,
+    time_start: str | None = None,
+    time_end: str | None = None,
+) -> int:
+    conditions = []
+    params = []
+
+    if camera_id:
+        conditions.append("camera_id = %s")
+        params.append(camera_id)
+    if type:
+        conditions.append("type = %s")
+        params.append(type)
+    if severity:
+        conditions.append("severity = %s")
+        params.append(severity)
+    if state:
+        conditions.append("state = %s")
+        params.append(state)
+    if time_start:
+        conditions.append("timestamp >= %s")
+        params.append(time_start)
+    if time_end:
+        conditions.append("timestamp <= %s")
+        params.append(time_end)
+
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+    sql = _adapt_sql(f"SELECT COUNT(*) FROM incidents{where_clause}")
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, tuple(params))
+        row = cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+def get_incident_stats(hours: int = 24) -> dict[str, Any]:
+    """Thống kê chi tiết về các sự cố."""
+    if _backend == "postgres":
+        cutoff = f"NOW() - INTERVAL '{hours} hours'"
+        sql_total = f"SELECT COUNT(*) FROM incidents WHERE timestamp >= {cutoff}"
+        sql_by_type = f"SELECT type, COUNT(*) FROM incidents WHERE timestamp >= {cutoff} GROUP BY type"
+        sql_by_severity = f"SELECT severity, COUNT(*) FROM incidents WHERE timestamp >= {cutoff} GROUP BY severity"
+        sql_by_state = f"SELECT state, COUNT(*) FROM incidents WHERE timestamp >= {cutoff} GROUP BY state"
+        params = ()
+    else:
+        from datetime import timedelta
+        cutoff_str = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        sql_total = "SELECT COUNT(*) FROM incidents WHERE timestamp >= ?"
+        sql_by_type = "SELECT type, COUNT(*) FROM incidents WHERE timestamp >= ? GROUP BY type"
+        sql_by_severity = "SELECT severity, COUNT(*) FROM incidents WHERE timestamp >= ? GROUP BY severity"
+        sql_by_state = "SELECT state, COUNT(*) FROM incidents WHERE timestamp >= ? GROUP BY state"
+        params = (cutoff_str,)
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        
+        cur.execute(sql_total, params)
+        row = cur.fetchone()
+        total = int(row[0]) if row else 0
+
+        cur.execute(sql_by_type, params)
+        type_counts = {r[0]: r[1] for r in cur.fetchall()}
+
+        cur.execute(sql_by_severity, params)
+        severity_counts = {r[0]: r[1] for r in cur.fetchall()}
+
+        cur.execute(sql_by_state, params)
+        state_counts = {r[0]: r[1] for r in cur.fetchall()}
+
+    return {
+        "total": total,
+        "by_type": type_counts,
+        "by_severity": severity_counts,
+        "by_state": state_counts,
+        "hours_window": hours,
+    }
+
+
+def insert_incident_config(camera_id: str, configs: dict[str, Any], user_id: str | None = None) -> None:
+    """Lưu hoặc cập nhật config độ nhạy cho camera."""
+    if _backend == "postgres":
+        sql = """
+            INSERT INTO incident_configs (camera_id, configs, updated_at, user_id)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (camera_id)
+            DO UPDATE SET configs = EXCLUDED.configs, updated_at = EXCLUDED.updated_at, user_id = EXCLUDED.user_id
+        """
+    else:
+        sql = """
+            INSERT INTO incident_configs (camera_id, configs, updated_at, user_id)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (camera_id)
+            DO UPDATE SET configs = excluded.configs, updated_at = excluded.updated_at, user_id = excluded.user_id
+        """
+    params = (
+        camera_id,
+        json.dumps(configs),
+        datetime.now(timezone.utc).isoformat(),
+        user_id,
+    )
+    with get_conn() as conn:
+        conn.cursor().execute(sql, params)
+
+
+def get_incident_config(camera_id: str) -> dict[str, Any] | None:
+    """Lấy config độ nhạy của một camera. Fallback về 'default' nếu không có."""
+    # Ensure database is initialized
+    if _backend == "none":
+        init_db()
+        
+    sql = _adapt_sql("SELECT configs FROM incident_configs WHERE camera_id=%s")
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (camera_id,))
+        row = cur.fetchone()
+        if not row and camera_id != "default":
+            cur.execute(sql, ("default",))
+            row = cur.fetchone()
+    if row:
+        val = row[0]
+        if isinstance(val, str):
+            try:
+                return json.loads(val)
+            except json.JSONDecodeError:
+                return None
+        return val
+    return None
+
+
 # ── Analytics queries ────────────────────────────────────────────────────────
 
 def get_dashboard_stats(hours: int = 24) -> dict[str, Any]:
@@ -742,7 +1060,7 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
         return dict(row)
 
     # Parse JSON fields
-    for key in ("class_counts", "preprocessing", "artifacts", "gcs_urls"):
+    for key in ("class_counts", "preprocessing", "artifacts", "gcs_urls", "location", "metadata", "configs"):
         if key in d and isinstance(d[key], str):
             try:
                 d[key] = json.loads(d[key])
