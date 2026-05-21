@@ -1,15 +1,23 @@
 from __future__ import annotations
 
 import io
+import json
 import math
 import re
 import time
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import asdict, dataclass
+from enum import Enum
+from typing import Any, Optional, Tuple
 
 import requests
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
+
+
+class StreamType(Enum):
+    """Enum for camera stream types"""
+    YOUTUBE_LIVE = "youtube_live"
+    HTTP_SNAPSHOT = "http_snapshot"
 
 
 YOUTUBE_EMBED_PATTERN = re.compile(r"https?://www\.youtube\.com/embed/([A-Za-z0-9_-]{6,})")
@@ -34,9 +42,12 @@ class ExternalCameraItem:
     youtube_id: str
     title: str
     snapshot_url: str
+    stream_type: StreamType = StreamType.YOUTUBE_LIVE
+    priority: int = 1
+    coordinates: Optional[Tuple[float, float]] = None
 
 
-def extract_camera_entries(page_url: str, limit: int = 4, timeout: int = 20) -> list[ExternalCameraItem]:
+def extract_camera_entries(page_url: str, limit: int = 6, timeout: int = 20) -> list[ExternalCameraItem]:
     response = requests.get(page_url, timeout=timeout)
     response.raise_for_status()
     html = response.text
@@ -163,3 +174,37 @@ def build_camera_collage(items: list[dict[str, Any]], cell_size: tuple[int, int]
         draw.text((x + 24, y + 22), label, fill="#edf5fb")
 
     return canvas
+
+
+def serialize_camera_item(item: ExternalCameraItem) -> dict:
+    """Convert ExternalCameraItem dataclass to JSON-serializable dict."""
+    data = asdict(item)
+    # Convert enum to string
+    data['stream_type'] = item.stream_type.value
+    return data
+
+
+def deserialize_camera_item(data: dict) -> ExternalCameraItem:
+    """Parse dict to ExternalCameraItem dataclass, raise ValueError if required fields missing."""
+    required_fields = {'index', 'embed_url', 'youtube_id', 'title', 'snapshot_url'}
+    if not required_fields.issubset(data.keys()):
+        missing = required_fields - set(data.keys())
+        raise ValueError(f"Missing required fields: {missing}")
+    
+    # Convert stream_type string back to enum
+    stream_type_value = data.get('stream_type', 'youtube_live')
+    try:
+        stream_type = StreamType(stream_type_value)
+    except ValueError:
+        raise ValueError(f"Invalid stream_type: {stream_type_value}")
+    
+    return ExternalCameraItem(
+        index=data['index'],
+        embed_url=data['embed_url'],
+        youtube_id=data['youtube_id'],
+        title=data['title'],
+        snapshot_url=data['snapshot_url'],
+        stream_type=stream_type,
+        priority=data.get('priority', 1),
+        coordinates=data.get('coordinates', None)
+    )

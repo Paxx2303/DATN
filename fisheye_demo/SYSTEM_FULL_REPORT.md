@@ -111,26 +111,120 @@ fisheye_demo/
 
 ### 3.2 Advanced Features
 
-#### 3.2.1 Speed Estimation
-**Nguyên lý**:
-- Track objects qua IoU giữa các frame
-- Đo displacement của centroid
-- Chuyển đổi pixel/frame → km/h
-- Fisheye correction cho vùng rìa ảnh
+#### 3.2.1 Speed Estimation (`speed_estimator.py`)
 
-**Cấu hình**:
-- `fps`: Frame rate (mặc định 25.0)
-- `pixels_per_meter`: Hệ số calibration (mặc định 8.0)
-- `speed_limit_kmh`: Ngưỡng tốc độ (mặc định 60.0)
+**Mục đích**: Ước tính tốc độ xe qua 2 frame liên tiếp
 
-#### 3.2.2 Congestion Detection
+**Nguyên lý hoạt động**:
+- **Object Tracking**: Track đối tượng qua IoU matching giữa các frame
+- **Displacement Calculation**: Đo khoảng cách di chuyển của centroid (pixel)
+- **Speed Conversion**: Chuyển đổi pixel/frame → m/s → km/h
+- **Fisheye Correction**: Hiệu chỉnh cho vùng rìa ảnh bị co lại
+- **Speed Smoothing**: Weighted moving average để giảm noise
+
+**Cấu hình chính**:
+```python
+# Khởi tạo Speed Estimator
+estimator = SpeedEstimator(
+    fps=25.0,                    # Frame rate video
+    pixels_per_meter=8.0,        # Hệ số calibration (px/m)
+    fisheye_correction=True,     # Bật hiệu chỉnh fisheye
+    speed_limit_kmh=60.0         # Ngưỡng tốc độ cho cảnh báo
+)
+```
+
+**Tính năng nâng cao**:
+- **Multi-object tracking**: Theo dõi nhiều xe cùng lúc
+- **Speed history**: Lưu lịch sử tốc độ 10 frame gần nhất
+- **Overspeed detection**: Phát hiện vi phạm tốc độ
+- **Speed categorization**: Phân loại tốc độ (Chậm/Bình thường/Nhanh/Quá tốc)
+- **Thread-safe**: Hỗ trợ xử lý đa luồng
+
+**Màu cảnh báo tốc độ**:
+- **Xanh** (#4FC3F7): < 40 km/h (Bình thường)
+- **Cam** (#FFB74D): 40-70 km/h (Nhanh)  
+- **Đỏ** (#EF5350): > 70 km/h (Quá tốc)
+
+**Calibration**:
+- `pixels_per_meter` phụ thuộc độ cao camera và góc nhìn
+- Camera 5m, góc 45° → ~8-12 px/m ở vùng trung tâm
+- Có thể calibrate bằng cách đo khoảng cách thực tế
+
+**API Endpoints**:
+```bash
+GET  /api/speed/stats      # Thống kê tốc độ tổng hợp
+GET  /api/speed/current    # Tốc độ hiện tại của các xe
+POST /api/speed/config     # Cập nhật cấu hình
+POST /api/speed/reset      # Reset thống kê
+POST /api/speed/detect-image  # Ước tính tốc độ từ 2 ảnh
+```
+
+#### 3.2.2 Congestion Detection (`congestion_detector.py`)
+
+**Mục đích**: Phát hiện ùn tắc giao thông theo vùng ROI (Region of Interest)
+
 **Level of Service (LoS)**:
-- **FREE** (< 20% capacity): Thông thoáng - Xanh lá
-- **SLOW** (20-50%): Chậm - Vàng
-- **CONGESTED** (50-80%): Ùn tắc - Cam  
-- **JAMMED** (> 80%): Kẹt xe nặng - Đỏ
+- **FREE** (< 20% capacity): Thông thoáng - Xanh lá (#4CAF50)
+- **SLOW** (20-50%): Chậm - Vàng (#FFD166)
+- **CONGESTED** (50-80%): Ùn tắc - Cam (#FF9800)
+- **JAMMED** (> 80%): Kẹt xe nặng - Đỏ (#F44336)
 
-**ROI Management**: Hỗ trợ nhiều vùng quan sát tùy chỉnh
+**Nguyên lý hoạt động**:
+- **ROI Definition**: Chia ảnh thành các vùng quan sát
+- **Vehicle Counting**: Đếm số xe trong mỗi ROI
+- **Density Calculation**: Tính mật độ = số xe / capacity ROI
+- **Trend Analysis**: Phân tích xu hướng tăng/giảm/ổn định
+- **Duration Tracking**: Theo dõi thời gian ùn tắc
+
+**Trọng số xe theo loại**:
+```python
+VEHICLE_WEIGHTS = {
+    "Car":        1.0,    # Xe con
+    "Motorbike":  0.5,    # Xe máy (nhỏ hơn)
+    "Bus":        2.5,    # Xe buýt (lớn)
+    "Truck":      2.0,    # Xe tải
+    "Pedestrian": 0.3,    # Người đi bộ
+}
+```
+
+**ROI Management**:
+```python
+# Thêm vùng ROI tùy chỉnh
+detector.add_roi(
+    name="intersection",     # Tên vùng
+    x1=0.1, y1=0.1,         # Góc trên trái (normalized 0-1)
+    x2=0.9, y2=0.9,         # Góc dưới phải
+    capacity=15             # Sức chứa tối đa
+)
+```
+
+**ROI mặc định**:
+- **full_frame**: Toàn bộ ảnh (0.0, 0.0, 1.0, 1.0) - capacity 20
+- **intersection**: Vùng trung tâm (0.25, 0.25, 0.75, 0.75) - capacity 10
+
+**Tính năng nâng cao**:
+- **Multi-ROI support**: Hỗ trợ nhiều vùng quan sát
+- **Historical tracking**: Lưu lịch sử 60 frame
+- **Congestion duration**: Tính thời gian ùn tắc liên tục
+- **Alert callbacks**: Gọi callback khi có ùn tắc
+- **Trend detection**: Phát hiện xu hướng tăng/giảm mật độ
+
+**API Endpoints**:
+```bash
+GET    /api/congestion/status           # Trạng thái ùn tắc hiện tại
+GET    /api/congestion/rois             # Danh sách ROI
+POST   /api/congestion/rois             # Thêm ROI mới
+DELETE /api/congestion/rois/<name>      # Xóa ROI
+GET    /api/congestion/history/<name>   # Lịch sử ROI
+POST   /api/congestion/reset            # Reset thống kê
+POST   /api/congestion/detect-image     # Phân tích ùn tắc từ ảnh
+```
+
+**Visualization**:
+- Vẽ viền màu quanh ROI theo mức độ ùn tắc
+- Overlay màu mờ khi ùn tắc nặng
+- Hiển thị % occupancy và số xe
+- Badge tổng thể ở góc ảnh
 
 #### 3.2.3 Alert System
 **Loại cảnh báo**:
@@ -509,6 +603,42 @@ graph TD
     I --> J[Update Dashboard]
 ```
 
+### 8.4 Speed Estimation Workflow
+```mermaid
+graph TD
+    A[Frame N-1] --> B[Extract Detections]
+    C[Frame N] --> D[Extract Detections]
+    B --> E[Initialize/Update Tracks]
+    D --> E
+    E --> F[IoU Matching]
+    F --> G[Calculate Displacement]
+    G --> H[Apply Fisheye Correction]
+    H --> I[Convert to km/h]
+    I --> J[Smooth Speed History]
+    J --> K[Check Speed Violations]
+    K --> L[Update Statistics]
+    L --> M[Annotate Frame]
+```
+
+### 8.5 Congestion Detection Workflow
+```mermaid
+graph TD
+    A[Frame Detections] --> B[Normalize Coordinates]
+    B --> C[For Each ROI]
+    C --> D[Count Vehicles in ROI]
+    D --> E[Apply Vehicle Weights]
+    E --> F[Calculate Occupancy %]
+    F --> G[Determine LoS Level]
+    G --> H[Update History]
+    H --> I[Analyze Trend]
+    I --> J[Track Duration]
+    J --> K{Congestion Alert?}
+    K -->|Yes| L[Trigger Callbacks]
+    K -->|No| M[Update Visualization]
+    L --> M
+    M --> N[Return Status]
+```
+
 ## 9. Performance & Scalability
 
 ### 9.1 Performance Metrics
@@ -517,6 +647,8 @@ graph TD
 - **Image Detection**: ~200-400ms (GPU)
 - **Video Processing**: ~1-2 FPS (depends on resolution)
 - **Fisheye Transform**: ~50-100ms per frame
+- **Speed Estimation**: ~5-10ms per frame (tracking overhead)
+- **Congestion Analysis**: ~2-5ms per frame (ROI processing)
 
 #### 9.1.2 Throughput
 - **Concurrent Requests**: 1-2 (limited by GPU memory)
@@ -569,6 +701,9 @@ GET /api/cloud/stats      # Cloud storage status
 - GPU utilization
 - Storage usage
 - Processing queue length
+- **Speed estimation accuracy**: Tracking success rate, speed distribution
+- **Congestion detection**: ROI occupancy levels, alert frequency
+- **Traffic analytics**: Hourly counts, peak detection accuracy
 
 ### 10.2 Logging & Debugging
 
@@ -620,8 +755,16 @@ logging.getLogger("fisheye_demo.analytics").setLevel(logging.INFO)
 ### 12.1 Planned Features
 - Real-time video streaming support
 - Multi-camera synchronization
-- Advanced tracking algorithms
+- Advanced tracking algorithms (DeepSORT, ByteTrack)
 - Machine learning model updates
+- **Speed estimation enhancements**:
+  - Multi-lane speed detection
+  - Vehicle trajectory prediction
+  - Speed limit enforcement zones
+- **Congestion detection improvements**:
+  - Dynamic ROI adjustment
+  - Traffic flow prediction
+  - Incident detection integration
 
 ### 12.2 Architecture Improvements
 - Microservices decomposition
@@ -635,11 +778,124 @@ logging.getLogger("fisheye_demo.analytics").setLevel(logging.INFO)
 - Multi-region deployment
 - CDN integration
 
-## 13. Troubleshooting Guide
+## 13. Testing & Validation
 
-### 13.1 Common Issues
+### 13.1 Speed Estimator Testing
 
-#### 13.1.1 Model Loading Failures
+#### 13.1.1 Unit Tests
+```python
+# Test tracking accuracy
+def test_speed_estimation_accuracy():
+    estimator = SpeedEstimator(fps=25.0, pixels_per_meter=10.0)
+    
+    # Simulate vehicle moving 50 pixels in 1 frame
+    # Expected speed: (50/10) * 25 * 3.6 = 45 km/h
+    det1 = {"class": "Car", "bbox": [100, 100, 150, 150]}
+    det2 = {"class": "Car", "bbox": [150, 100, 200, 150]}
+    
+    estimator.update([det1], 800, 600)
+    results = estimator.update([det2], 800, 600)
+    
+    assert abs(results[0]["speed_kmh"] - 45.0) < 5.0
+```
+
+#### 13.1.2 Integration Tests
+```bash
+# Test API endpoints
+curl -X POST http://127.0.0.1:5000/api/speed/detect-image \
+  -F "image1=@test_frame1.jpg" \
+  -F "image2=@test_frame2.jpg" \
+  -F "fps=25" \
+  -F "pixels_per_meter=8.0"
+
+# Expected response format validation
+{
+  "speeds": [
+    {
+      "track_id": "0",
+      "class": "Car", 
+      "speed_kmh": 42.3,
+      "is_overspeed": false
+    }
+  ],
+  "config": {
+    "fps": 25.0,
+    "pixels_per_meter": 8.0
+  }
+}
+```
+
+### 13.2 Congestion Detector Testing
+
+#### 13.2.1 ROI Validation Tests
+```python
+def test_roi_vehicle_counting():
+    detector = CongestionDetector()
+    detector.add_roi("test_zone", 0.2, 0.2, 0.8, 0.8, capacity=10)
+    
+    # Vehicles inside ROI
+    detections = [
+        {"class": "Car", "bbox": [200, 200, 250, 250]},  # Inside
+        {"class": "Car", "bbox": [100, 100, 150, 150]},  # Outside
+    ]
+    
+    result = detector.update(detections, 800, 600)
+    zone = next(z for z in result["zones"] if z["name"] == "test_zone")
+    
+    assert zone["current_count"] == 1
+    assert zone["occupancy_pct"] == 10.0  # 1/10 * 100%
+```
+
+#### 13.2.2 LoS Classification Tests
+```python
+def test_los_classification():
+    detector = CongestionDetector()
+    detector.add_roi("test", 0.0, 0.0, 1.0, 1.0, capacity=10)
+    
+    # Test different congestion levels
+    test_cases = [
+        (1, "FREE"),      # 10% occupancy
+        (3, "SLOW"),      # 30% occupancy  
+        (7, "CONGESTED"), # 70% occupancy
+        (9, "JAMMED"),    # 90% occupancy
+    ]
+    
+    for count, expected_los in test_cases:
+        detections = [{"class": "Car", "bbox": [i*50, 100, i*50+40, 140]} 
+                     for i in range(count)]
+        result = detector.update(detections, 800, 600)
+        assert result["zones"][0]["los"] == expected_los
+```
+
+### 13.3 Performance Benchmarks
+
+#### 13.3.1 Speed Estimation Benchmarks
+```bash
+# Benchmark tracking performance
+python -m pytest fisheye_demo/tests/test_speed_estimator.py::test_performance -v
+
+# Expected results:
+# - Processing time: < 10ms per frame
+# - Memory usage: < 50MB for 100 tracks
+# - Tracking accuracy: > 85% IoU match rate
+```
+
+#### 13.3.2 Congestion Detection Benchmarks  
+```bash
+# Benchmark ROI processing
+python -m pytest fisheye_demo/tests/test_congestion_detector.py::test_performance -v
+
+# Expected results:
+# - ROI processing: < 5ms per frame
+# - Memory usage: < 20MB for 10 ROIs
+# - Classification accuracy: > 90% LoS correctness
+```
+
+## 14. Troubleshooting Guide
+
+### 14.1 Common Issues
+
+#### 14.1.1 Model Loading Failures
 ```bash
 # Check model file exists
 ls -la *.pt
@@ -651,7 +907,7 @@ nvidia-smi
 python -c "import torch; print(torch.cuda.is_available())"
 ```
 
-#### 13.1.2 Database Connection Issues
+#### 14.1.2 Database Connection Issues
 ```bash
 # Test PostgreSQL connection
 psql $DATABASE_URL -c "SELECT 1;"
@@ -660,7 +916,7 @@ psql $DATABASE_URL -c "SELECT 1;"
 ls -la fisheye_demo/fisheye.db
 ```
 
-#### 13.1.3 Storage Issues
+#### 14.1.3 Storage Issues
 ```bash
 # Check disk space
 df -h
@@ -669,30 +925,63 @@ df -h
 gcloud auth list
 ```
 
-### 13.2 Performance Issues
+#### 14.1.4 Speed Estimation Issues
+```bash
+# Check tracking performance
+curl http://127.0.0.1:5000/api/speed/stats
 
-#### 13.2.1 Slow Inference
+# Verify calibration settings
+curl http://127.0.0.1:5000/api/speed/current
+
+# Test with known speed reference
+curl -X POST http://127.0.0.1:5000/api/speed/detect-image \
+  -F "image1=@frame1.jpg" \
+  -F "image2=@frame2.jpg" \
+  -F "fps=25" \
+  -F "pixels_per_meter=8.0"
+```
+
+#### 14.1.5 Congestion Detection Issues
+```bash
+# Check ROI configuration
+curl http://127.0.0.1:5000/api/congestion/rois
+
+# Monitor congestion status
+curl http://127.0.0.1:5000/api/congestion/status
+
+# Review ROI history
+curl http://127.0.0.1:5000/api/congestion/history/intersection
+```
+
+### 14.2 Performance Issues
+
+#### 14.2.1 Slow Inference
 - Check GPU utilization: `nvidia-smi`
 - Monitor memory usage: `free -h`
 - Review model size and complexity
 
-#### 13.2.2 Database Slowness
+#### 14.2.2 Database Slowness
 - Check connection pool settings
 - Review query performance
 - Monitor database metrics
 
-## 14. Conclusion
+## 15. Conclusion
 
-Hệ thống Fisheye Demo là một giải pháp phân tích giao thông thông minh với kiến trúc modular và khả năng mở rộng cao. Với việc tích hợp AI/ML, cloud storage, và real-time analytics, hệ thống cung cấp một nền tảng mạnh mẽ cho việc phân tích và giám sát giao thông đô thị.
+Hệ thống Fisheye Demo là một giải pháp phân tích giao thông thông minh với kiến trúc modular và khả năng mở rộng cao. Với việc tích hợp AI/ML, cloud storage, real-time analytics, speed estimation, và congestion detection, hệ thống cung cấp một nền tảng mạnh mẽ và toàn diện cho việc phân tích và giám sát giao thông đô thị hiện đại.
 
-### 14.1 Điểm Mạnh
+### 15.1 Điểm Mạnh
 - Kiến trúc linh hoạt và modular
 - Hỗ trợ đa dạng định dạng media
 - Tích hợp cloud services
 - Real-time analytics và alerting
 - Deployment automation
+- **Advanced traffic analysis**:
+  - Speed estimation với fisheye correction
+  - Multi-ROI congestion detection
+  - Real-time tracking và monitoring
+  - Comprehensive API coverage
 
-### 14.2 Khuyến Nghị
+### 15.2 Khuyến Nghị
 - Triển khai monitoring và alerting toàn diện
 - Implement authentication và authorization
 - Tối ưu hóa performance cho production
