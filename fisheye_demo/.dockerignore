@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.benchmarks/
+.streamlit/
+.idea/
+static/uploads/
+static/results/
+recent_images.sqlite3
+*.sqlite3
+*.db
+.env
+.env.local
+.env.production

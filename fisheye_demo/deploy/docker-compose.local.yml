@@ -1,0 +1,30 @@
+services:
+  fisheye-web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BASE_IMAGE: "python:3.10-slim"
+    image: fisheye-demo:local
+    command: python app.py
+    ports:
+      - "5000:5000"
+    environment:
+      FISHEYE_DEFAULT_CONF: "0.25"
+      FISHEYE_DEFAULT_IOU: "0.45"
+      FISHEYE_DEVICE: "cpu"
+      FISHEYE_PRELOAD_MODEL: "0"
+      FISHEYE_IMPORT_PRELOAD_MODEL: "0"
+      FISHEYE_UPLOAD_DIR: "/app/static/uploads"
+      FISHEYE_RESULTS_DIR: "/app/static/results"
+      FISHEYE_RECENT_IMAGE_DB: "/app/data/recent_images.sqlite3"
+      FISHEYE_RECENT_IMAGE_LIMIT: "100"
+      FISHEYE_MAX_UPLOAD_MB: "64"
+      FISHEYE_MAX_VIDEO_SECONDS: "60"
+      FISHEYE_EXTERNAL_CAMERA_SOURCE_MODE: "snapshot"
+    volumes:
+      - ..:/app
+      - fisheye-local-data:/app/data
+
+volumes:
+  fisheye-local-data:

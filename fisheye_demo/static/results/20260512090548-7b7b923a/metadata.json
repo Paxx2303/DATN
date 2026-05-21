@@ -1,0 +1,355 @@
+{
+  "id": "20260512090548-7b7b923a",
+  "task": "detect",
+  "media_type": "external_camera_grid",
+  "filename": "https://camera.0511.vn/camera.html",
+  "created_at": "2026-05-12T09:05:50Z",
+  "source_layout": "normal",
+  "preprocessing": {
+    "source_layout": "normal",
+    "enabled": true,
+    "strength": 0.7,
+    "radius": 0.85,
+    "effect": "standard",
+    "center_x_ratio": 0.5,
+    "center_y_ratio": 0.6,
+    "axis_scale_x": 1.18,
+    "axis_scale_y": 0.82,
+    "profile": "external_camera"
+  },
+  "parameters": {
+    "confidence_threshold": 0.25,
+    "iou_threshold": 0.45
+  },
+  "model": {
+    "source": "custom",
+    "loaded_from": "C:\\Using\\NCKH\\yolo11_fisheye_v5_best (1).pt",
+    "loaded_from_name": "yolo11_fisheye_v5_best (1).pt",
+    "device": "cpu"
+  },
+  "summary": {
+    "camera_count": 1,
+    "total_objects": 24,
+    "class_counts": {
+      "Car": 5,
+      "Bus": 5,
+      "Truck": 0,
+      "Pedestrian": 8,
+      "Motorbike": 6
+    },
+    "inference_ms": 1138.69
+  },
+  "cameras": [
+    {
+      "index": 1,
+      "title": "Camera",
+      "youtube_id": "G_G8A6JU_LI",
+      "snapshot_url": "https://i.ytimg.com/vi/G_G8A6JU_LI/maxresdefault_live.jpg",
+      "total_objects": 24,
+      "class_counts": {
+        "Car": 5,
+        "Bus": 5,
+        "Truck": 0,
+        "Pedestrian": 8,
+        "Motorbike": 6
+      },
+      "detections": [
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.8799,
+          "bbox": [
+            1092,
+            291,
+            1279,
+            525
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.8037,
+          "bbox": [
+            335,
+            166,
+            532,
+            277
+          ],
+          "color": "#4FC3F7"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.769,
+          "bbox": [
+            956,
+            235,
+            1130,
+            373
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.6544,
+          "bbox": [
+            0,
+            172,
+            153,
+            317
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.6512,
+          "bbox": [
+            546,
+            155,
+            648,
+            215
+          ],
+          "color": "#4FC3F7"
+        },
+        {
+          "class": "Bus",
+          "raw_class": "Bus",
+          "confidence": 0.6097,
+          "bbox": [
+            769,
+            201,
+            824,
+            255
+          ],
+          "color": "#FFB74D"
+        },
+        {
+          "class": "Pedestrian",
+          "raw_class": "Pedestrian",
+          "confidence": 0.6065,
+          "bbox": [
+            924,
+            189,
+            974,
+            269
+          ],
+          "color": "#A5D6A7"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.5651,
+          "bbox": [
+            1062,
+            180,
+            1162,
+            260
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.5135,
+          "bbox": [
+            334,
+            165,
+            531,
+            278
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.4622,
+          "bbox": [
+            484,
+            162,
+            601,
+            230
+          ],
+          "color": "#4FC3F7"
+        },
+        {
+          "class": "Bus",
+          "raw_class": "Bus",
+          "confidence": 0.4253,
+          "bbox": [
+            7,
+            375,
+            131,
+            537
+          ],
+          "color": "#FFB74D"
+        },
+        {
+          "class": "Bus",
+          "raw_class": "Bus",
+          "confidence": 0.4209,
+          "bbox": [
+            962,
+            156,
+            992,
+            192
+          ],
+          "color": "#FFB74D"
+        },
+        {
+          "class": "Bus",
+          "raw_class": "Bus",
+          "confidence": 0.4153,
+          "bbox": [
+            923,
+            217,
+            971,
+            281
+          ],
+          "color": "#FFB74D"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.3322,
+          "bbox": [
+            714,
+            157,
+            781,
+            211
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Pedestrian",
+          "raw_class": "Pedestrian",
+          "confidence": 0.314,
+          "bbox": [
+            833,
+            208,
+            873,
+            258
+          ],
+          "color": "#A5D6A7"
+        },
+        {
+          "class": "Pedestrian",
+          "raw_class": "Pedestrian",
+          "confidence": 0.2988,
+          "bbox": [
+            1025,
+            149,
+            1074,
+            209
+          ],
+          "color": "#A5D6A7"
+        },
+        {
+          "class": "Pedestrian",
+          "raw_class": "Pedestrian",
+          "confidence": 0.2966,
+          "bbox": [
+            60,
+            325,
+            127,
+            450
+          ],
+          "color": "#A5D6A7"
+        },
+        {
+          "class": "Pedestrian",
+          "raw_class": "Pedestrian",
+          "confidence": 0.2939,
+          "bbox": [
+            939,
+            156,
+            967,
+            195
+          ],
+          "color": "#A5D6A7"
+        },
+        {
+          "class": "Pedestrian",
+          "raw_class": "Pedestrian",
+          "confidence": 0.292,
+          "bbox": [
+            794,
+            181,
+            836,
+            229
+          ],
+          "color": "#A5D6A7"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.2905,
+          "bbox": [
+            716,
+            134,
+            827,
+            196
+          ],
+          "color": "#4FC3F7"
+        },
+        {
+          "class": "Bus",
+          "raw_class": "Bus",
+          "confidence": 0.2864,
+          "bbox": [
+            659,
+            195,
+            721,
+            258
+          ],
+          "color": "#FFB74D"
+        },
+        {
+          "class": "Pedestrian",
+          "raw_class": "Pedestrian",
+          "confidence": 0.2833,
+          "bbox": [
+            6,
+            376,
+            101,
+            526
+          ],
+          "color": "#A5D6A7"
+        },
+        {
+          "class": "Pedestrian",
+          "raw_class": "Pedestrian",
+          "confidence": 0.2774,
+          "bbox": [
+            619,
+            263,
+            737,
+            419
+          ],
+          "color": "#A5D6A7"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.27,
+          "bbox": [
+            0,
+            169,
+            153,
+            309
+          ],
+          "color": "#4FC3F7"
+        }
+      ]
+    }
+  ],
+  "artifacts": {
+    "overview_annotated": "overview_annotated.jpg",
+    "metadata": "metadata.json",
+    "camera_1_original": "camera_1_original.jpg",
+    "camera_1_annotated": "camera_1_annotated.jpg",
+    "camera_1_preprocessed": "camera_1_preprocessed.jpg"
+  }
+}

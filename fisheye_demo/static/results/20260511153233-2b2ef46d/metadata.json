@@ -1,0 +1,340 @@
+{
+  "id": "20260511153233-2b2ef46d",
+  "task": "detect",
+  "media_type": "external_camera_grid",
+  "filename": "https://camera.0511.vn/camera.html",
+  "created_at": "2026-05-11T15:32:48Z",
+  "source_layout": "normal",
+  "preprocessing": {
+    "source_layout": "normal",
+    "enabled": true,
+    "strength": 0.7,
+    "radius": 0.85,
+    "effect": "standard",
+    "center_x_ratio": 0.5,
+    "center_y_ratio": 0.6,
+    "axis_scale_x": 1.18,
+    "axis_scale_y": 0.82,
+    "profile": "external_camera"
+  },
+  "parameters": {
+    "confidence_threshold": 0.25,
+    "iou_threshold": 0.45
+  },
+  "model": {
+    "source": "custom",
+    "loaded_from": "C:\\Using\\NCKH\\yolo11_fisheye_v5_best (1).pt",
+    "loaded_from_name": "yolo11_fisheye_v5_best (1).pt",
+    "device": "cpu"
+  },
+  "summary": {
+    "camera_count": 4,
+    "total_objects": 18,
+    "class_counts": {
+      "Car": 8,
+      "Bus": 1,
+      "Truck": 0,
+      "Pedestrian": 1,
+      "Motorbike": 8
+    },
+    "inference_ms": 1098.43
+  },
+  "cameras": [
+    {
+      "index": 1,
+      "title": "Camera\" />",
+      "youtube_id": "G_G8A6JU_LI",
+      "snapshot_url": "https://i.ytimg.com/vi/G_G8A6JU_LI/maxresdefault_live.jpg",
+      "total_objects": 8,
+      "class_counts": {
+        "Car": 4,
+        "Bus": 0,
+        "Truck": 0,
+        "Pedestrian": 1,
+        "Motorbike": 3
+      },
+      "detections": [
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.7566,
+          "bbox": [
+            1076,
+            281,
+            1279,
+            521
+          ],
+          "color": "#4FC3F7"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.7262,
+          "bbox": [
+            567,
+            154,
+            677,
+            213
+          ],
+          "color": "#4FC3F7"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.6827,
+          "bbox": [
+            654,
+            150,
+            748,
+            204
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.6467,
+          "bbox": [
+            508,
+            171,
+            607,
+            227
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.3849,
+          "bbox": [
+            1096,
+            179,
+            1280,
+            380
+          ],
+          "color": "#4FC3F7"
+        },
+        {
+          "class": "Pedestrian",
+          "raw_class": "Pedestrian",
+          "confidence": 0.3821,
+          "bbox": [
+            1095,
+            135,
+            1125,
+            187
+          ],
+          "color": "#A5D6A7"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.3551,
+          "bbox": [
+            1075,
+            286,
+            1279,
+            521
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.2866,
+          "bbox": [
+            851,
+            100,
+            923,
+            144
+          ],
+          "color": "#4FC3F7"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Camera\" />",
+      "youtube_id": "sJvEFrG0wq0",
+      "snapshot_url": "https://i.ytimg.com/vi/sJvEFrG0wq0/maxresdefault_live.jpg",
+      "total_objects": 7,
+      "class_counts": {
+        "Car": 2,
+        "Bus": 0,
+        "Truck": 0,
+        "Pedestrian": 0,
+        "Motorbike": 5
+      },
+      "detections": [
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.8808,
+          "bbox": [
+            61,
+            253,
+            212,
+            367
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.875,
+          "bbox": [
+            181,
+            179,
+            380,
+            312
+          ],
+          "color": "#4FC3F7"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.7384,
+          "bbox": [
+            519,
+            166,
+            580,
+            201
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.6569,
+          "bbox": [
+            641,
+            324,
+            926,
+            637
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.5504,
+          "bbox": [
+            445,
+            175,
+            526,
+            221
+          ],
+          "color": "#CE93D8"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.4585,
+          "bbox": [
+            644,
+            325,
+            924,
+            631
+          ],
+          "color": "#4FC3F7"
+        },
+        {
+          "class": "Motorbike",
+          "raw_class": "Motorbike",
+          "confidence": 0.3974,
+          "bbox": [
+            719,
+            133,
+            756,
+            153
+          ],
+          "color": "#CE93D8"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Camera\" />",
+      "youtube_id": "oif_zZFIfB4",
+      "snapshot_url": "https://i.ytimg.com/vi/oif_zZFIfB4/maxresdefault_live.jpg",
+      "total_objects": 2,
+      "class_counts": {
+        "Car": 1,
+        "Bus": 1,
+        "Truck": 0,
+        "Pedestrian": 0,
+        "Motorbike": 0
+      },
+      "detections": [
+        {
+          "class": "Bus",
+          "raw_class": "Bus",
+          "confidence": 0.7295,
+          "bbox": [
+            474,
+            135,
+            520,
+            165
+          ],
+          "color": "#FFB74D"
+        },
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.4879,
+          "bbox": [
+            248,
+            135,
+            356,
+            211
+          ],
+          "color": "#4FC3F7"
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Camera\" />",
+      "youtube_id": "x8tUUv-NGXs",
+      "snapshot_url": "https://i.ytimg.com/vi/x8tUUv-NGXs/maxresdefault_live.jpg",
+      "total_objects": 1,
+      "class_counts": {
+        "Car": 1,
+        "Bus": 0,
+        "Truck": 0,
+        "Pedestrian": 0,
+        "Motorbike": 0
+      },
+      "detections": [
+        {
+          "class": "Car",
+          "raw_class": "Car",
+          "confidence": 0.3272,
+          "bbox": [
+            46,
+            624,
+            197,
+            720
+          ],
+          "color": "#4FC3F7"
+        }
+      ]
+    }
+  ],
+  "artifacts": {
+    "overview_annotated": "overview_annotated.jpg",
+    "metadata": "metadata.json",
+    "camera_1_original": "camera_1_original.jpg",
+    "camera_1_annotated": "camera_1_annotated.jpg",
+    "camera_1_preprocessed": "camera_1_preprocessed.jpg",
+    "camera_2_original": "camera_2_original.jpg",
+    "camera_2_annotated": "camera_2_annotated.jpg",
+    "camera_2_preprocessed": "camera_2_preprocessed.jpg",
+    "camera_3_original": "camera_3_original.jpg",
+    "camera_3_annotated": "camera_3_annotated.jpg",
+    "camera_3_preprocessed": "camera_3_preprocessed.jpg",
+    "camera_4_original": "camera_4_original.jpg",
+    "camera_4_annotated": "camera_4_annotated.jpg",
+    "camera_4_preprocessed": "camera_4_preprocessed.jpg"
+  }
+}

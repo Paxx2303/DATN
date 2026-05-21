@@ -1,0 +1,2542 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FishEye8K Intelligent Traffic Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    :root {
+      --font-sans: 'Inter', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+
+      /* Core Theme Colors (Curated HSL tailored colors, sleek dark mode) */
+      --bg: #050a0f;
+      --color-background-tertiary: #050a0f;
+      --color-background-primary: rgba(13, 22, 33, 0.88);
+      --color-background-secondary: rgba(255, 255, 255, 0.04);
+      --color-border-tertiary: rgba(255, 255, 255, 0.08);
+      --color-border-secondary: rgba(255, 255, 255, 0.16);
+
+      --color-text-primary: #edf5fb;
+      --color-text-secondary: #93aab9;
+      --color-text-tertiary: rgba(147, 170, 185, 0.6);
+
+      --color-text-info: #55d6ff;
+      --color-text-success: #8ad48a;
+      --color-text-warning: #ffd166;
+      --color-text-danger: #ff6b6b;
+
+      --border-radius-lg: 16px;
+      --border-radius-md: 10px;
+      --border-radius-sm: 6px;
+
+      --shadow: 0 20px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-sans);
+    }
+
+    body {
+      min-height: 100vh;
+      color: var(--color-text-primary);
+      background:
+        radial-gradient(circle at top left, rgba(85, 214, 255, 0.12), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(255, 209, 102, 0.08), transparent 30%),
+        linear-gradient(180deg, #050a0f 0%, #080f16 100%);
+      overflow-x: hidden;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Core container */
+    .app {
+      display: flex;
+      width: 100%;
+      max-width: 1440px;
+      min-height: 820px;
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      overflow: hidden;
+      background: var(--color-background-primary);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow);
+    }
+
+    /* Sidebar style */
+    .sidebar {
+      width: 60px;
+      background: rgba(8, 14, 21, 0.95);
+      border-right: 0.5px solid var(--color-border-tertiary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .sicon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--border-radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--color-text-tertiary);
+      font-size: 20px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .sicon:hover,
+    .sicon.active {
+      background: var(--color-background-secondary);
+      color: var(--color-text-info);
+      transform: scale(1.05);
+    }
+
+    /* Main Area layout */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: rgba(5, 10, 15, 0.4);
+    }
+
+    /* Topbar */
+    .topbar {
+      height: 52px;
+      background: rgba(8, 14, 21, 0.4);
+      border-bottom: 0.5px solid var(--color-border-tertiary);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    /* Tabs */
+    .pagetabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 0.5px solid var(--color-border-tertiary);
+      background: rgba(8, 14, 21, 0.2);
+      padding: 0 16px;
+      overflow-x: auto;
+    }
+
+    .ptab {
+      font-size: 12.5px;
+      font-weight: 500;
+      padding: 12px 16px;
+      cursor: pointer;
+      color: var(--color-text-secondary);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -0.5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .ptab:hover {
+      color: var(--color-text-primary);
+    }
+
+    .ptab.active {
+      color: var(--color-text-info);
+      border-bottom-color: var(--color-text-info);
+    }
+
+    /* Pages controller */
+    .page {
+      display: none;
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: var(--border-radius-sm);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      line-height: 1;
+    }
+
+    .badge.b-green {
+      background: rgba(138, 212, 138, 0.12);
+      color: var(--color-text-success);
+    }
+
+    .badge.b-amber {
+      background: rgba(255, 209, 102, 0.12);
+      color: var(--color-text-warning);
+    }
+
+    .badge.b-red {
+      background: rgba(255, 107, 107, 0.12);
+      color: var(--color-text-danger);
+    }
+
+    .badge.b-blue {
+      background: rgba(85, 214, 255, 0.12);
+      color: var(--color-text-info);
+    }
+
+    .badge.b-gray {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--color-text-secondary);
+    }
+
+    .badge.b-purple {
+      background: rgba(179, 136, 255, 0.12);
+      color: #b388ff;
+    }
+
+    .badge.b-teal {
+      background: rgba(26, 188, 156, 0.12);
+      color: #1abc9c;
+    }
+
+    /* Card & widgets */
+    .card {
+      background: rgba(13, 22, 33, 0.5);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 16px 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      backdrop-filter: blur(10px);
+    }
+
+    .metric {
+      background: var(--color-background-secondary);
+      border-radius: var(--border-radius-md);
+      padding: 12px 16px;
+      border: 0.5px solid var(--color-border-tertiary);
+      transition: all 0.2s;
+    }
+
+    .metric:hover {
+      border-color: var(--color-border-secondary);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 6px;
+    }
+
+    .metric-val {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+      line-height: 1.2;
+    }
+
+    .metric-sub {
+      font-size: 10px;
+      color: var(--color-text-secondary);
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sec {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--color-text-tertiary);
+      letter-spacing: .5px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Grids */
+    .grid2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .grid3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .grid4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+
+    /* Tables */
+    .tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .tbl th {
+      text-align: left;
+      padding: 10px;
+      font-weight: 600;
+      color: var(--color-text-tertiary);
+      border-bottom: 0.5px solid var(--color-border-tertiary);
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: .4px;
+    }
+
+    .tbl td {
+      padding: 10px;
+      color: var(--color-text-secondary);
+      border-bottom: 0.5px solid var(--color-border-tertiary);
+      vertical-align: middle;
+    }
+
+    .tbl tr:last-child td {
+      border-bottom: none;
+    }
+
+    .tbl tr:hover td {
+      color: var(--color-text-primary);
+      background: var(--color-background-secondary);
+    }
+
+    /* Form Fields */
+    input[type="text"],
+    input[type="number"],
+    select {
+      background: rgba(0, 0, 0, 0.25);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-md);
+      color: var(--color-text-primary);
+      padding: 8px 12px;
+      font-size: 12px;
+      font-family: inherit;
+      width: 100%;
+      outline: none;
+      transition: all 0.15s;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+      border-color: var(--color-text-info);
+      box-shadow: 0 0 6px rgba(85, 214, 255, 0.15);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--color-background-secondary);
+      outline: none;
+      margin: 8px 0;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--color-text-info);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: var(--border-radius-md);
+      border: 0.5px solid var(--color-border-secondary);
+      background: var(--color-background-secondary);
+      color: var(--color-text-primary);
+      cursor: pointer;
+      transition: all 0.15s;
+      gap: 6px;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--color-text-primary);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-p {
+      background: var(--color-text-info);
+      color: #050a0f;
+      border-color: var(--color-text-info);
+    }
+
+    .btn-p:hover {
+      background: #9ce8ff;
+      border-color: #9ce8ff;
+      color: #050a0f;
+    }
+
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 10px;
+    }
+
+    /* System logs console style */
+    .log-line {
+      display: flex;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.5;
+      margin-bottom: 6px;
+      color: var(--color-text-secondary);
+    }
+
+    .log-time {
+      color: var(--color-text-tertiary);
+      flex-shrink: 0;
+    }
+
+    .log-ok {
+      color: var(--color-text-success);
+    }
+
+    .log-warn {
+      color: var(--color-text-warning);
+    }
+
+    .log-err {
+      color: var(--color-text-danger);
+    }
+
+    /* Media frames & upload zone */
+    .workspace-media-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .media {
+      background: #04080c;
+      border-radius: var(--border-radius-md);
+      border: 0.5px solid var(--color-border-tertiary);
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .media img,
+    .media video {
+      max-width: 100%;
+      max-height: 280px;
+      object-fit: contain;
+    }
+
+    .placeholder {
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .upload-zone {
+      border: 1px dashed var(--color-border-secondary);
+      border-radius: var(--border-radius-lg);
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      background: var(--color-background-secondary);
+      transition: all 0.2s;
+      margin-bottom: 16px;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.drag {
+      border-color: var(--color-text-info);
+      background: rgba(85, 214, 255, 0.04);
+    }
+
+    .upload-zone strong {
+      display: block;
+      color: var(--color-text-primary);
+      font-size: 12.5px;
+      margin-bottom: 4px;
+    }
+
+    .upload-zone p {
+      color: var(--color-text-tertiary);
+      font-size: 10.5px;
+    }
+
+    .hidden-input {
+      display: none;
+    }
+
+    /* History & legend lists */
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .history-item {
+      background: var(--color-background-secondary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-md);
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+
+    .history-item:hover {
+      border-color: var(--color-border-secondary);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .history-main {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .history-main strong {
+      color: var(--color-text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+
+    .history-sub {
+      color: var(--color-text-tertiary);
+      font-size: 10px;
+    }
+
+    .history-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .tiny-link {
+      font-size: 10px;
+      color: var(--color-text-info);
+      text-decoration: none;
+      background: rgba(85, 214, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: var(--border-radius-sm);
+      border: 0.5px solid rgba(85, 214, 255, 0.2);
+      transition: all 0.15s;
+    }
+
+    .tiny-link:hover {
+      background: var(--color-text-info);
+      color: #050a0f;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin-top: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--color-text-secondary);
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .detection-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 280px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+
+    .det-item {
+      background: var(--color-background-secondary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-md);
+      padding: 6px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 11.5px;
+    }
+
+    .det-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .det-class {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+      color: var(--color-text-primary);
+    }
+
+    .det-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .det-meta {
+      color: var(--color-text-secondary);
+      font-size: 10.5px;
+    }
+
+    .summary-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .summary-pill {
+      background: var(--color-background-secondary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-sm);
+      font-size: 10px;
+      padding: 3px 8px;
+      color: var(--color-text-secondary);
+    }
+
+    /* Live Camera styling */
+    .external-result-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .external-result-item {
+      background: var(--color-background-secondary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-md);
+      overflow: hidden;
+      font-size: 11px;
+    }
+
+    .external-result-item img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+    }
+
+    .external-result-copy {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .external-result-copy strong {
+      color: var(--color-text-primary);
+    }
+
+    .external-result-copy span {
+      color: var(--color-text-tertiary);
+      font-size: 9.5px;
+    }
+
+    .camera-live-status {
+      border-left: 3px solid var(--color-text-info);
+      padding-left: 10px;
+      margin-top: 8px;
+    }
+
+    .camera-live-status strong {
+      display: block;
+      color: var(--color-text-primary);
+      margin-bottom: 2px;
+    }
+
+    .camera-live-status span {
+      font-size: 10px;
+      color: var(--color-text-secondary);
+    }
+
+    /* Details alignment */
+    .df {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      padding: 6px 0;
+      border-bottom: 0.5px solid var(--color-border-tertiary);
+    }
+
+    .df:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .df:first-child {
+      padding-top: 0;
+    }
+
+    .df-l {
+      color: var(--color-text-tertiary);
+    }
+
+    .df-v {
+      color: var(--color-text-primary);
+      font-weight: 500;
+      text-align: right;
+    }
+
+    /* Pulse Status indicator */
+    .pulse {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--color-text-success);
+      box-shadow: 0 0 8px var(--color-text-success);
+      display: inline-block;
+      animation: pulse-anim 1.5s infinite alternate;
+    }
+
+    .pulse.running {
+      background: var(--color-text-info);
+      box-shadow: 0 0 8px var(--color-text-info);
+    }
+
+    .pulse.warn {
+      background: var(--color-text-warning);
+      box-shadow: 0 0 8px var(--color-text-warning);
+    }
+
+    @keyframes pulse-anim {
+      0% {
+        transform: scale(0.85);
+        opacity: 0.6;
+      }
+
+      100% {
+        transform: scale(1.15);
+        opacity: 1;
+      }
+    }
+
+    /* Overlay & Toast popup */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 9, 13, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .overlay.show {
+      display: flex;
+    }
+
+    .overlay-card {
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 32px;
+      width: min(90vw, 420px);
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+
+    .loader {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(85, 214, 255, 0.15);
+      border-top-color: var(--color-text-info);
+      border-radius: 50%;
+      margin: 0 auto 20px;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(13, 22, 33, 0.95);
+      border: 0.5px solid var(--color-text-danger);
+      border-radius: var(--border-radius-md);
+      padding: 12px 18px;
+      font-size: 12px;
+      color: var(--color-text-danger);
+      z-index: 2000;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+      box-shadow: var(--shadow);
+    }
+
+    .toast.success {
+      border-color: var(--color-text-success);
+      color: var(--color-text-success);
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    /* Media query updates */
+    @media (max-width: 1024px) {
+      body {
+        padding: 10px;
+      }
+
+      .app {
+        flex-direction: column;
+        min-height: auto;
+      }
+
+      .sidebar {
+        width: 100%;
+        height: 52px;
+        flex-direction: row;
+        justify-content: center;
+        padding: 0 16px;
+        gap: 16px;
+      }
+
+      .sidebar .brand-logo {
+        margin-bottom: 0 !important;
+        margin-right: auto;
+      }
+
+      .page {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="overlay" id="overlay">
+    <div class="overlay-card">
+      <div class="loader"></div>
+      <h2 style="margin-bottom: 10px; font-size:18px;">Processing media</h2>
+      <p style="font-size:12px; color:var(--color-text-secondary);">The backend is processing your request. Please
+        wait...</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="app">
+    <!-- Sidebar navigation -->
+    <div class="sidebar">
+      <div class="brand-logo"
+        style="width:36px; height:36px; border-radius:var(--border-radius-md); background:linear-gradient(135deg, var(--color-text-info), #9ce8ff); display:flex; align-items:center; justify-content:center; margin-bottom:16px; cursor:pointer;"
+        onclick="nav('dash')">
+        <i class="ti ti-aperture" style="font-size:20px; color:#050a0f;"></i>
+      </div>
+
+      <div class="sicon active" id="side-btn-dash" onclick="nav('dash')" title="Dashboard">
+        <i class="ti ti-layout-dashboard"></i>
+      </div>
+      <div class="sicon" id="side-btn-workspace" onclick="nav('workspace')" title="Workspace">
+        <i class="ti ti-scan"></i>
+      </div>
+      <div class="sicon" id="side-btn-streams" onclick="nav('streams')" title="Live Streams">
+        <i class="ti ti-video"></i>
+      </div>
+      <div class="sicon" id="side-btn-analytics" onclick="nav('analytics')" title="Traffic Analytics">
+        <i class="ti ti-chart-bar"></i>
+      </div>
+      <div class="sicon" id="side-btn-cloud" onclick="nav('cloud')" title="Cloud Gallery (6h)">
+        <i class="ti ti-cloud"></i>
+      </div>
+      <div class="sicon" id="side-btn-alerts" onclick="nav('alerts')" title="Alerts">
+        <i class="ti ti-bell" id="alert-bell-icon"></i>
+      </div>
+      <div class="sicon" id="side-btn-history" onclick="nav('history')" title="Run History">
+        <i class="ti ti-history"></i>
+      </div>
+      <div class="sicon" id="side-btn-settings" onclick="nav('settings')" title="Settings">
+        <i class="ti ti-settings"></i>
+      </div>
+    </div>
+
+    <!-- Main Content wrapper -->
+    <div class="main">
+      <!-- Topbar with live devices -->
+      <div class="topbar">
+        <span class="sec" id="ptitle"
+          style="font-size:13px; font-weight:600; color:var(--color-text-primary); margin-bottom:0;">Hệ thống giám sát
+          (Dashboard)</span>
+        <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+          <span class="badge b-purple"><i class="ti ti-cpu" style="margin-right:3px;"></i> Device: <span
+              id="top-device">loading</span></span>
+          <span class="badge b-blue">Conf: <span id="top-conf">{{ "%.2f"|format(default_conf) }}</span></span>
+          <span class="badge b-amber">IoU: <span id="top-iou">{{ "%.2f"|format(default_iou) }}</span></span>
+          <span class="badge b-teal">Classes: <span id="class-count">5</span></span>
+          <span class="badge b-gray">Runs: <span id="recent-run-count">0</span></span>
+        </div>
+      </div>
+
+      <!-- Horizontal Tabs -->
+      <div class="pagetabs">
+        <div class="ptab active" id="tab-btn-dash" onclick="nav('dash')">Dashboard</div>
+        <div class="ptab" id="tab-btn-workspace" onclick="nav('workspace')">Workspace (Inference)</div>
+        <div class="ptab" id="tab-btn-streams" onclick="nav('streams')">Live Streams</div>
+        <div class="ptab" id="tab-btn-history" onclick="nav('history')">Run History</div>
+        <div class="ptab" id="tab-btn-settings" onclick="nav('settings')">Settings</div>
+      </div>
+
+      <!-- Page 1: Dashboard -->
+      <div class="page active" id="page-dash">
+        <div class="grid4" style="margin-bottom:20px;">
+          <div class="metric">
+            <div class="metric-label">Tổng số run</div>
+            <div class="metric-val" id="stat-total">—</div>
+            <div class="metric-sub">Tổng số lần thực thi của hệ thống</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Detect runs</div>
+            <div class="metric-val" id="stat-detect">—</div>
+            <div class="metric-sub">Nhận diện đối tượng (YOLOv11/SAHI)</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Convert runs</div>
+            <div class="metric-val" id="stat-convert">—</div>
+            <div class="metric-sub">Chuyển đổi hiệu ứng fisheye</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Avg inference</div>
+            <div class="metric-val" id="stat-inference">—</div>
+            <div class="metric-sub">Thời gian infer trung bình</div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="sec"><i class="ti ti-activity"></i> Hoạt động hệ thống</div>
+            <div class="log-line">
+              <span class="log-time">14:52</span>
+              <span class="log-ok">✓</span>
+              <span>Hệ thống sẵn sàng đón nhận dữ liệu.</span>
+            </div>
+            <div class="log-line">
+              <span class="log-time">14:50</span>
+              <span class="log-ok">✓</span>
+              <span>Mô hình YOLOv11 & SAHI đã được nạp thành công.</span>
+            </div>
+            <div class="log-line">
+              <span class="log-time">14:48</span>
+              <span class="log-ok">✓</span>
+              <span>CUDA backend kết nối thiết bị: <span class="badge b-purple">GPU Active</span></span>
+            </div>
+            <div class="log-line">
+              <span class="log-time">14:45</span>
+              <span class="log-ok">✓</span>
+              <span>Khởi tạo Gunicorn dynamic port thành công.</span>
+            </div>
+            <hr style="border:none; border-top:0.5px solid var(--color-border-tertiary); margin:16px 0;">
+            <div class="sec"><i class="ti ti-list"></i> Legend lớp nhận diện</div>
+            <div class="legend" id="legend"></div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div class="sec" style="margin-bottom:0;"><i class="ti ti-chart-bar"></i> Phân bố đối tượng đã detect
+              </div>
+              <button id="stats-refresh-btn" class="btn btn-sm" type="button" title="Làm mới">Làm mới ↻</button>
+            </div>
+            <div
+              style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:16px; border:0.5px solid var(--color-border-tertiary); position:relative;">
+              <div id="chart-empty" class="placeholder"
+                style="display:none; min-height:180px; display:flex; align-items:center; justify-content:center;">Chưa
+                có dữ liệu detect.</div>
+              <canvas id="class-chart" width="560" height="240"
+                style="width:100%; height:auto; display:block;"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page 2: Workspace -->
+      <div class="page" id="page-workspace">
+        <div style="display:grid; grid-template-columns: 320px 1fr; gap:20px; align-items:start;">
+          <!-- Left panel controls -->
+          <div style="display:flex; flex-direction:column; gap:20px;">
+            <div class="card">
+              <div class="sec"><i class="ti ti-cloud-upload"></i> Tải tệp tin lên</div>
+              <div class="upload-zone" id="upload-zone">
+                <i class="ti ti-cloud-upload"
+                  style="font-size:28px; color:var(--color-text-info); margin-bottom:8px; display:block;"></i>
+                <strong>Chọn ảnh hoặc video</strong>
+                <p>Kéo thả tệp tin hoặc click để chọn</p>
+                <input class="hidden-input" id="file-input" type="file" accept="image/*,video/*">
+              </div>
+
+              <div class="meta-box" style="display:flex; flex-direction:column; gap:4px; font-size:11.5px;">
+                <div class="df"><span class="df-l">Selected file</span><span class="df-v" id="selected-file">none</span>
+                </div>
+                <div class="df"><span class="df-l">Media type</span><span class="df-v" id="selected-type">unknown</span>
+                </div>
+                <div class="df"><span class="df-l">Dimensions</span><span class="df-v" id="selected-size">unknown</span>
+                </div>
+                <div class="df"><span class="df-l">Last request</span><span class="df-v" id="request-id">none</span>
+                </div>
+                <div class="df"><span class="df-l">Saved result</span><span class="df-v"
+                    id="saved-result">pending</span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="sec"><i class="ti ti-adjustments-horizontal"></i> Cấu hình mô hình & hiệu ứng</div>
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <div>
+                  <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
+                    for="source-layout">Input layout</label>
+                  <select id="source-layout">
+                    <option value="fisheye">Already fisheye</option>
+                    <option value="normal">Normal traffic view</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
+                    for="fisheye-enabled">Fisheye preprocess</label>
+                  <select id="fisheye-enabled">
+                    <option value="auto">Auto from input layout</option>
+                    <option value="true">Force enabled</option>
+                    <option value="false">Disable</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
+                    for="model-key">Detection checkpoint</label>
+                  <select id="model-key">
+                    {% for model in selectable_models %}
+                    <option value="{{ model.key }}" {% if model.key==default_model_key %}selected{% endif %}>{{
+                      model.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
+                    for="fisheye-effect">Loại hiệu ứng</label>
+                  <select id="fisheye-effect">
+                    {% for effect_value, effect_label in fisheye_effect_choices %}
+                    <option value="{{ effect_value }}" {% if effect_value==default_fisheye_effect %}selected{% endif %}>
+                      {{ effect_label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:2px;">
+                    <label class="metric-label" style="font-size:9.5px; margin-bottom:0;" for="confidence">Confidence
+                      threshold</label>
+                    <span id="confidence-value" style="color:var(--color-text-info); font-weight:bold;">{{
+                      "%.2f"|format(default_conf) }}</span>
+                  </div>
+                  <input id="confidence" type="range" min="0.05" max="0.95" step="0.01" value="{{ "
+                    %.2f"|format(default_conf) }}">
+                </div>
+                <div>
+                  <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:2px;">
+                    <label class="metric-label" style="font-size:9.5px; margin-bottom:0;" for="iou">IoU
+                      threshold</label>
+                    <span id="iou-value" style="color:var(--color-text-info); font-weight:bold;">{{
+                      "%.2f"|format(default_iou) }}</span>
+                  </div>
+                  <input id="iou" type="range" min="0.10" max="0.90" step="0.01" value="{{ " %.2f"|format(default_iou)
+                    }}">
+                </div>
+                <div>
+                  <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:2px;">
+                    <label class="metric-label" style="font-size:9.5px; margin-bottom:0;" for="fisheye-strength">Cường
+                      độ biến dạng</label>
+                    <span id="fisheye-strength-value" style="color:var(--color-text-info); font-weight:bold;">{{
+                      "%.0f"|format(default_fisheye_strength * 100) }}%</span>
+                  </div>
+                  <input id="fisheye-strength" type="range" min="0.00" max="1.00" step="0.01" value="{{ "
+                    %.2f"|format(default_fisheye_strength) }}">
+                </div>
+                <div>
+                  <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:2px;">
+                    <label class="metric-label" style="font-size:9.5px; margin-bottom:0;" for="fisheye-radius">Bán kính
+                      ảnh hưởng</label>
+                    <span id="fisheye-radius-value" style="color:var(--color-text-info); font-weight:bold;">{{
+                      "%.0f"|format(default_fisheye_radius * 100) }}%</span>
+                  </div>
+                  <input id="fisheye-radius" type="range" min="0.05" max="1.00" step="0.01" value="{{ "
+                    %.2f"|format(default_fisheye_radius) }}">
+                </div>
+                <div id="video-detect-fps-wrap" style="display:none;">
+                  <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
+                    for="video-detect-fps">Tốc độ detect video (FPS)</label>
+                  <input id="video-detect-fps" type="number" min="0" max="120" step="0.5" value=""
+                    placeholder="0 = mọi frame">
+                  <div class="field-hint" style="font-size:9px; opacity:0.8; margin-top:4px; line-height:1.3;">0 hoặc để
+                    trống = YOLO mọi frame; >0 = giới hạn số lần infer/giây (khung hình ở giữa dùng lại bbox).</div>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
+                <button class="btn btn-p" id="detect-btn" disabled><i class="ti ti-scan"></i> Detect objects</button>
+                <button class="btn" id="convert-btn" disabled><i class="ti ti-arrows-minimize"></i> Convert to
+                  fisheye</button>
+                <button class="btn" id="clear-btn" type="button"><i class="ti ti-trash"></i> Clear</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right panel media previews and stats summary -->
+          <div style="display:flex; flex-direction:column; gap:20px;">
+            <div class="workspace-media-grid">
+              <div class="card">
+                <div class="sec" style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                  <span>Original input</span>
+                  <span id="original-meta" class="badge b-gray">waiting</span>
+                </div>
+                <div class="media" id="original-media">
+                  <div class="placeholder">The uploaded image or video preview will appear here.</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="sec" style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                  <span>Fisheye preprocessed</span>
+                  <span id="preprocessed-meta" class="badge b-gray">waiting</span>
+                </div>
+                <div class="media" id="preprocessed-media">
+                  <div class="placeholder">If preprocessing is enabled, the warped fisheye output will appear here.
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="sec" style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                  <span>Detection or conversion result</span>
+                  <span id="result-meta" class="badge b-gray">waiting</span>
+                </div>
+                <div class="media" id="result-media">
+                  <div class="placeholder">Detection annotations or converted fisheye video will appear here.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="display:flex; gap:12px; align-items:center;">
+              <span class="sec" style="margin-bottom:0;"><i class="ti ti-download"></i> Downloads:</span>
+              <a class="btn btn-sm" id="download-primary" href="#" target="_blank" rel="noopener"
+                style="display:none;">Open main artifact</a>
+              <a class="btn btn-sm" id="download-json" href="#" target="_blank" rel="noopener"
+                style="display:none;">Metadata JSON</a>
+            </div>
+
+            <div class="card">
+              <div class="sec"><i class="ti ti-list-details"></i> Summary & Detections</div>
+              <div class="grid4" id="stats-grid" style="margin-bottom:12px;"></div>
+              <div class="summary-row" id="summary-row" style="margin-bottom:12px;">
+                <div class="summary-pill">No operation has run yet.</div>
+              </div>
+              <div class="detection-list" id="detection-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page 3: Live Streams -->
+      <div class="page" id="page-streams">
+        <div style="display:grid; grid-template-columns: 320px 1fr; gap:20px; align-items:start;">
+          <!-- Left panel camera configs -->
+          <div style="display:flex; flex-direction:column; gap:20px;">
+            <div class="card">
+              <div class="sec"><i class="ti ti-video"></i> External Camera Video</div>
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <div>
+                  <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
+                    for="external-camera-url">Camera Stream URL</label>
+                  <input id="external-camera-url" type="text" value="{{ external_camera_url }}" spellcheck="false">
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                  <div>
+                    <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
+                      for="external-camera-live-interval" title="Seconds between each server detection cycle">Server
+                      cycle (s)</label>
+                    <input id="external-camera-live-interval" type="number" min="0.1" max="120" step="0.1" value="{{ "
+                      %.1f"|format(external_camera_live_interval_seconds) }}">
+                  </div>
+                  <div>
+                    <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
+                      for="external-camera-live-ui-fps" title="How often the page asks the server for live status">UI
+                      refresh (FPS)</label>
+                    <input id="external-camera-live-ui-fps" type="number" min="1" max="60" step="1" value="15">
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
+                <button class="btn btn-p" id="external-camera-load" type="button"><i class="ti ti-device-tv"></i> Load
+                  camera video</button>
+                <button class="btn" id="external-camera-detect" type="button"><i class="ti ti-scan"></i> Detect 1
+                  camera</button>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                  <button class="btn" id="external-camera-live-start" type="button"><i class="ti ti-player-play"></i>
+                    Start live</button>
+                  <button class="btn" id="external-camera-live-stop" type="button"><i class="ti ti-player-stop"></i>
+                    Stop live</button>
+                </div>
+                <button class="btn" id="external-camera-live-refresh" type="button"><i class="ti ti-refresh"></i>
+                  Refresh live</button>
+                <a class="btn" id="external-camera-open" href="{{ external_camera_url }}" target="_blank"
+                  rel="noopener"><i class="ti ti-external-link"></i> Open new tab</a>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="sec"><i class="ti ti-pulse"></i> Live Monitor Status</div>
+              <div id="external-camera-live-status" class="camera-live-status">
+                <strong>Live monitor stopped</strong>
+                <span>No polling cycle has started yet.</span>
+              </div>
+            </div>
+
+            <div class="card" style="font-size:11px; color:var(--color-text-tertiary); line-height:1.4;">
+              <i class="ti ti-info-circle" style="color:var(--color-text-info);"></i> Khu vực này dùng để mở nguồn
+              camera ngoài và đối chiếu trực tiếp với hệ thống detect của ta. Nếu website ngoài chặn `iframe`, hãy dùng
+              nút mở tab mới rồi kiểm tra song song.
+            </div>
+          </div>
+
+          <!-- Right panel camera frame and feeds -->
+          <div style="display:flex; flex-direction:column; gap:20px;">
+            <div class="card">
+              <div class="sec"><i class="ti ti-video"></i> Camera Live Frame</div>
+              <div class="media" style="min-height:300px;">
+                <iframe id="external-camera-frame"
+                  style="width:100%; height:340px; border:none; border-radius:var(--border-radius-md);"
+                  src="about:blank" referrerpolicy="strict-origin-when-cross-origin" loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowfullscreen title="External camera video"></iframe>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="sec"><i class="ti ti-grid-dots"></i> Camera Detections Grid</div>
+              <div id="external-camera-results" class="external-result-grid">
+                <div class="placeholder" style="max-width:none; grid-column: 1 / -1;">
+                  Chưa chạy detect cho camera ngoài.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page 4: History -->
+      <div class="page" id="page-history">
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div class="sec" style="margin-bottom:0;"><i class="ti ti-history"></i> Lịch sử Inference</div>
+            <button class="btn btn-sm" id="refresh-history" type="button"><i class="ti ti-refresh"></i> Refresh</button>
+          </div>
+          <div class="history-list" id="history-list">
+            <div class="placeholder" style="max-width:none;">History will populate after the backend responds.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page 5: Settings -->
+      <div class="page" id="page-settings">
+        <div class="card">
+          <div class="sec"><i class="ti ti-settings"></i> Cấu hình & Trạng thái hệ thống</div>
+          <div style="display:flex; flex-direction:column; gap:6px; max-width:600px; margin-top:10px;">
+            <div class="df"><span class="df-l">Model Active</span><span class="df-v" id="status-model">loading</span>
+            </div>
+            <div class="df"><span class="df-l">Model Weight Path</span><span class="df-v" id="status-path"
+                style="font-family:var(--font-mono); font-size:10px;">loading</span></div>
+            <div class="df"><span class="df-l">Device</span><span class="df-v" id="status-device">loading</span></div>
+            <div class="df"><span class="df-l">Results Directory</span><span class="df-v" id="status-results"
+                style="font-family:var(--font-mono); font-size:10px;">loading</span></div>
+            <div class="df"><span class="df-l">Model Source Mode</span><span class="df-v"
+                id="model-source">loading</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const CLASS_NAMES = {{ class_names| tojson }};
+    const CLASS_COLORS = {{ class_colors| tojson }};
+
+    const state = {
+      currentFile: null,
+      currentObjectUrl: null,
+      currentMediaType: null,
+      latestRecord: null,
+      livePollTimer: null,
+      liveMonitorRunning: false,
+      liveStreamAttached: false,
+      lastLiveCycleCount: null,
+      lastLiveUpdatedAt: null,
+    };
+
+    const elements = {
+      uploadZone: document.getElementById("upload-zone"),
+      fileInput: document.getElementById("file-input"),
+      sourceLayout: document.getElementById("source-layout"),
+      fisheyeEnabled: document.getElementById("fisheye-enabled"),
+      modelKey: document.getElementById("model-key"),
+      confidence: document.getElementById("confidence"),
+      confidenceValue: document.getElementById("confidence-value"),
+      iou: document.getElementById("iou"),
+      iouValue: document.getElementById("iou-value"),
+      fisheyeStrength: document.getElementById("fisheye-strength"),
+      fisheyeStrengthValue: document.getElementById("fisheye-strength-value"),
+      fisheyeRadius: document.getElementById("fisheye-radius"),
+      fisheyeRadiusValue: document.getElementById("fisheye-radius-value"),
+      fisheyeEffect: document.getElementById("fisheye-effect"),
+      videoDetectFpsWrap: document.getElementById("video-detect-fps-wrap"),
+      videoDetectFps: document.getElementById("video-detect-fps"),
+      detectBtn: document.getElementById("detect-btn"),
+      convertBtn: document.getElementById("convert-btn"),
+      clearBtn: document.getElementById("clear-btn"),
+      refreshHistory: document.getElementById("refresh-history"),
+      externalCameraFrame: document.getElementById("external-camera-frame"),
+      externalCameraUrl: document.getElementById("external-camera-url"),
+      externalCameraLiveInterval: document.getElementById("external-camera-live-interval"),
+      externalCameraLiveUiFps: document.getElementById("external-camera-live-ui-fps"),
+      externalCameraLoad: document.getElementById("external-camera-load"),
+      externalCameraDetect: document.getElementById("external-camera-detect"),
+      externalCameraLiveStart: document.getElementById("external-camera-live-start"),
+      externalCameraLiveStop: document.getElementById("external-camera-live-stop"),
+      externalCameraLiveRefresh: document.getElementById("external-camera-live-refresh"),
+      externalCameraLiveStatus: document.getElementById("external-camera-live-status"),
+      externalCameraOpen: document.getElementById("external-camera-open"),
+      externalCameraResults: document.getElementById("external-camera-results"),
+      downloadPrimary: document.getElementById("download-primary"),
+      downloadJson: document.getElementById("download-json"),
+      originalMedia: document.getElementById("original-media"),
+      preprocessedMedia: document.getElementById("preprocessed-media"),
+      resultMedia: document.getElementById("result-media"),
+      originalMeta: document.getElementById("original-meta"),
+      preprocessedMeta: document.getElementById("preprocessed-meta"),
+      resultMeta: document.getElementById("result-meta"),
+      statsGrid: document.getElementById("stats-grid"),
+      summaryRow: document.getElementById("summary-row"),
+      detectionList: document.getElementById("detection-list"),
+      historyList: document.getElementById("history-list"),
+      statsRefreshBtn: document.getElementById("stats-refresh-btn"),
+      statTotal: document.getElementById("stat-total"),
+      statDetect: document.getElementById("stat-detect"),
+      statConvert: document.getElementById("stat-convert"),
+      statInference: document.getElementById("stat-inference"),
+      classChart: document.getElementById("class-chart"),
+      chartEmpty: document.getElementById("chart-empty"),
+      legend: document.getElementById("legend"),
+      overlay: document.getElementById("overlay"),
+      toast: document.getElementById("toast"),
+      selectedFile: document.getElementById("selected-file"),
+      selectedType: document.getElementById("selected-type"),
+      selectedSize: document.getElementById("selected-size"),
+      requestId: document.getElementById("request-id"),
+      savedResult: document.getElementById("saved-result"),
+      statusModel: document.getElementById("status-model"),
+      statusPath: document.getElementById("status-path"),
+      statusDevice: document.getElementById("status-device"),
+      statusResults: document.getElementById("status-results"),
+      topDevice: document.getElementById("top-device"),
+      topConf: document.getElementById("top-conf"),
+      topIou: document.getElementById("top-iou"),
+      classCount: document.getElementById("class-count"),
+      recentRunCount: document.getElementById("recent-run-count"),
+      modelSource: document.getElementById("model-source"),
+    };
+
+    /* Tab controller */
+    function nav(pageId) {
+      document.querySelectorAll(".page").forEach((page) => {
+        page.classList.remove("active");
+      });
+      document.querySelectorAll(".sicon").forEach((icon) => {
+        icon.classList.remove("active");
+      });
+      document.querySelectorAll(".ptab").forEach((tab) => {
+        tab.classList.remove("active");
+      });
+
+      const pageEl = document.getElementById(`page-${pageId}`);
+      if (pageEl) {
+        pageEl.classList.add("active");
+      }
+
+      // Activate sidebar icon
+      const sidebarBtn = document.getElementById(`side-btn-${pageId}`);
+      if (sidebarBtn) {
+        sidebarBtn.classList.add("active");
+      }
+
+      // Activate top tab
+      const tabBtn = document.getElementById(`tab-btn-${pageId}`);
+      if (tabBtn) {
+        tabBtn.classList.add("active");
+      }
+
+      // Update header title
+      const titles = {
+        dash: "Hệ thống giám sát (Dashboard)",
+        workspace: "Phòng thí nghiệm (Workspace)",
+        streams: "Camera ngoài (Live Streams)",
+        history: "Lịch sử Inference (History)",
+        settings: "Cấu hình hệ thống (Settings)"
+      };
+      const titleEl = document.getElementById("ptitle");
+      if (titleEl && titles[pageId]) {
+        titleEl.textContent = titles[pageId];
+      }
+    }
+
+    function setToast(message, isSuccess = false) {
+      elements.toast.textContent = message;
+      elements.toast.className = isSuccess ? "toast success show" : "toast show";
+      window.setTimeout(() => {
+        elements.toast.className = isSuccess ? "toast success" : "toast";
+      }, 3200);
+    }
+
+    function setLoading(isLoading) {
+      elements.overlay.classList.toggle("show", isLoading);
+      const canOperate = !isLoading && !!state.currentFile;
+      elements.detectBtn.disabled = !canOperate;
+      elements.convertBtn.disabled = !canOperate;
+      elements.refreshHistory.disabled = isLoading;
+    }
+
+    function updateControlLabels() {
+      elements.confidenceValue.textContent = Number(elements.confidence.value).toFixed(2);
+      elements.iouValue.textContent = Number(elements.iou.value).toFixed(2);
+      elements.fisheyeStrengthValue.textContent = `${(Number(elements.fisheyeStrength.value) * 100).toFixed(0)}%`;
+      elements.fisheyeRadiusValue.textContent = `${(Number(elements.fisheyeRadius.value) * 100).toFixed(0)}%`;
+      elements.topConf.textContent = Number(elements.confidence.value).toFixed(2);
+      elements.topIou.textContent = Number(elements.iou.value).toFixed(2);
+    }
+
+    function renderLegend() {
+      elements.legend.innerHTML = CLASS_NAMES.map((name) => `
+        <div class="legend-item">
+          <span class="legend-dot" style="background:${CLASS_COLORS[name] || "#ffffff"}"></span>
+          <div>${name}</div>
+        </div>
+      `).join("");
+      elements.classCount.textContent = String(CLASS_NAMES.length);
+    }
+
+    function normalizeExternalCameraUrl(value) {
+      const rawValue = String(value || "").trim();
+      if (!rawValue) {
+        return "";
+      }
+      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(rawValue)) {
+        return rawValue;
+      }
+      return `https://${rawValue}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function getLiveUiPollMs() {
+      const raw = Number.parseFloat(elements.externalCameraLiveUiFps.value);
+      const fps = Number.isFinite(raw) ? Math.min(60, Math.max(1, raw)) : 15;
+      return Math.max(16, Math.round(1000 / fps));
+    }
+
+    async function loadExternalCamera(urlOverride = null) {
+      const normalizedUrl = normalizeExternalCameraUrl(urlOverride ?? elements.externalCameraUrl.value);
+      if (!normalizedUrl) {
+        setToast("Nhập URL camera hợp lệ.");
+        return;
+      }
+      elements.externalCameraUrl.value = normalizedUrl;
+      elements.externalCameraOpen.href = normalizedUrl;
+      elements.externalCameraFrame.src = "about:blank";
+      elements.externalCameraFrame.src = "about:blank";
+      try {
+        const query = new URLSearchParams({ external_camera_url: normalizedUrl });
+        const response = await fetch(`/api/external-camera/source?${query.toString()}`, { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Không resolve được camera video.");
+        }
+
+        if (data.source_mode === "stream") {
+          elements.externalCameraFrame.src = "about:blank";
+          if (elements.externalCameraLiveStatus && !state.liveMonitorRunning) {
+            elements.externalCameraLiveStatus.innerHTML = `
+              <strong>${escapeHtml(data.title || "External camera stream")}</strong>
+              <span>Direct stream source is configured for live GPU inference.</span>
+            `;
+          }
+        } else {
+          elements.externalCameraFrame.src = data.embed_url;
+          if (elements.externalCameraLiveStatus && !state.liveMonitorRunning) {
+            elements.externalCameraLiveStatus.innerHTML = `
+              <strong>${escapeHtml(data.title || "External camera video")}</strong>
+              <span>YouTube ${escapeHtml(data.youtube_id || "")}</span>
+            `;
+          }
+        }
+      } catch (error) {
+        if (elements.externalCameraLiveStatus && !state.liveMonitorRunning) {
+          elements.externalCameraLiveStatus.innerHTML = `
+            <strong>Camera video unavailable</strong>
+            <span>${escapeHtml(error.message || "Không tải được embed video.")}</span>
+          `;
+        }
+        setToast(error.message || "Không tải được video camera.");
+      }
+    }
+
+    function renderExternalCameraGrid(data, cacheBustToken = null) {
+      elements.externalCameraResults.replaceChildren();
+      if (!data.cameras || !data.cameras.length) {
+        const empty = document.createElement("div");
+        empty.className = "placeholder";
+        empty.style.maxWidth = "none";
+        empty.style.gridColumn = "1 / -1";
+        empty.textContent = "Không có ảnh camera nào được detect.";
+        elements.externalCameraResults.appendChild(empty);
+        return;
+      }
+
+      for (const camera of data.cameras) {
+        const article = document.createElement("article");
+        article.className = "external-result-item";
+        const img = document.createElement("img");
+        let src = camera.annotated;
+        if (
+          cacheBustToken != null
+          && typeof src === "string"
+          && src.startsWith("data:")
+        ) {
+          const base = src.split("#")[0];
+          src = `${base}#${String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "")}`;
+        }
+        img.src = src;
+        img.alt = camera.title || "";
+        const copy = document.createElement("div");
+        copy.className = "external-result-copy";
+        const titleEl = document.createElement("strong");
+        titleEl.textContent = camera.title || "";
+        const meta = document.createElement("span");
+        meta.textContent = `${camera.total_objects} objects | ${camera.youtube_id || ""}`;
+        copy.appendChild(titleEl);
+        copy.appendChild(meta);
+        article.appendChild(img);
+        article.appendChild(copy);
+        elements.externalCameraResults.appendChild(article);
+      }
+    }
+
+    function renderPlaceholder(target, message) {
+      target.innerHTML = `<div class="placeholder">${message}</div>`;
+    }
+
+    function renderMedia(target, source, mediaType, cacheBustToken = null) {
+      target.innerHTML = "";
+      if (!source) {
+        renderPlaceholder(target, "No media available.");
+        return;
+      }
+      if (mediaType === "video") {
+        const video = document.createElement("video");
+        video.src = source;
+        video.controls = true;
+        video.muted = true;
+        target.appendChild(video);
+        return;
+      }
+      const image = document.createElement("img");
+      let src = source;
+      if (
+        cacheBustToken != null
+        && typeof source === "string"
+        && source.startsWith("data:")
+      ) {
+        const base = source.split("#")[0];
+        src = `${base}#${String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "")}`;
+      }
+      image.src = src;
+      image.alt = "preview";
+      target.appendChild(image);
+    }
+
+    function resetDownloads() {
+      elements.downloadPrimary.style.display = "none";
+      elements.downloadJson.style.display = "none";
+      elements.downloadPrimary.href = "#";
+      elements.downloadJson.href = "#";
+    }
+
+    function resetResultView() {
+      state.latestRecord = null;
+      elements.requestId.textContent = "none";
+      elements.savedResult.textContent = "pending";
+      elements.preprocessedMeta.textContent = "waiting";
+      elements.resultMeta.textContent = "waiting";
+      resetDownloads();
+      renderPlaceholder(elements.preprocessedMedia, "If preprocessing is enabled, the warped fisheye output will appear here.");
+      renderPlaceholder(elements.resultMedia, "Detection annotations or converted fisheye video will appear here.");
+      elements.statsGrid.innerHTML = "";
+      elements.summaryRow.innerHTML = '<div class="summary-pill">No operation has run yet.</div>';
+      elements.detectionList.innerHTML = "";
+    }
+
+    function getRequestedFisheyeState() {
+      if (elements.fisheyeEnabled.value === "true") {
+        return "true";
+      }
+      if (elements.fisheyeEnabled.value === "false") {
+        return "false";
+      }
+      return "";
+    }
+
+    function buildFormData(fieldName) {
+      const formData = new FormData();
+      formData.append(fieldName, state.currentFile);
+      formData.append("model_key", elements.modelKey.value);
+      formData.append("conf", elements.confidence.value);
+      formData.append("iou", elements.iou.value);
+      formData.append("source_layout", elements.sourceLayout.value);
+      formData.append("fisheye_strength", elements.fisheyeStrength.value);
+      formData.append("fisheye_radius", elements.fisheyeRadius.value);
+      formData.append("fisheye_effect", elements.fisheyeEffect.value);
+      const applyValue = getRequestedFisheyeState();
+      if (applyValue) {
+        formData.append("apply_fisheye", applyValue);
+      }
+      if (state.currentMediaType === "video") {
+        const rawFps = elements.videoDetectFps.value.trim();
+        if (rawFps !== "" && Number(rawFps) > 0) {
+          formData.append("video_detect_fps", rawFps);
+        }
+      }
+      return formData;
+    }
+
+    function setArtifactLinks(record, preferredKey) {
+      if (!record || !record.artifact_urls) {
+        resetDownloads();
+        return;
+      }
+      const keys = Object.keys(record.artifact_urls);
+      const primaryKey = preferredKey && record.artifact_urls[preferredKey] ? preferredKey : keys.find((key) => key !== "metadata");
+      if (primaryKey) {
+        elements.downloadPrimary.href = record.artifact_urls[primaryKey];
+        elements.downloadPrimary.textContent = `Open ${primaryKey.replaceAll("_", " ")}`;
+        elements.downloadPrimary.style.display = "inline-flex";
+      }
+      if (record.artifact_urls.metadata) {
+        elements.downloadJson.href = record.artifact_urls.metadata;
+        elements.downloadJson.style.display = "inline-flex";
+      }
+    }
+
+    function renderDetectionSummary(data) {
+      const counts = data.class_counts || {};
+      elements.statsGrid.innerHTML = CLASS_NAMES.map((name) => `
+        <div class="stat-card" style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 12px; border:0.5px solid var(--color-border-tertiary);">
+          <div class="count" style="color:${CLASS_COLORS[name] || "#ffffff"}; font-size:18px; font-weight:700;">${counts[name] || 0}</div>
+          <div class="name" style="font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; margin-top:2px;">${name}</div>
+        </div>
+      `).join("");
+
+      elements.summaryRow.innerHTML = `
+        <div class="summary-pill">Task detect</div>
+        <div class="summary-pill">Model ${data.model?.loaded_from_name || "unknown"}</div>
+        <div class="summary-pill">Objects ${data.total_objects}</div>
+        <div class="summary-pill">Inference ${data.inference_ms} ms</div>
+        <div class="summary-pill">Layout ${data.preprocessing.source_layout}</div>
+        <div class="summary-pill">Fisheye ${data.preprocessing.enabled ? "on" : "off"}</div>
+      `;
+
+      if (!data.detections.length) {
+        elements.detectionList.innerHTML = '<div class="placeholder" style="max-width:none;">No objects detected above the configured threshold.</div>';
+        return;
+      }
+
+      elements.detectionList.innerHTML = data.detections.map((item) => `
+        <div class="det-item">
+          <div class="det-main">
+            <div class="det-class">
+              <span class="det-dot" style="background:${item.color || "#ffffff"}"></span>
+              <span>${item.class}</span>
+            </div>
+            <div class="det-meta">${(item.confidence * 100).toFixed(1)}%</div>
+          </div>
+          <div class="det-meta">bbox: [${item.bbox.join(", ")}]</div>
+        </div>
+      `).join("");
+    }
+
+    function renderVideoDetectionSummary(data) {
+      const summary = data.summary || {};
+      const counts = summary.class_counts || {};
+      const orderedClasses = Object.entries(counts).sort((left, right) => right[1] - left[1]);
+
+      elements.statsGrid.innerHTML = `
+        <div class="stat-card" style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 12px; border:0.5px solid var(--color-border-tertiary);">
+          <div class="count" style="color:var(--color-text-info); font-size:18px; font-weight:700;">${summary.total_frames || 0}</div>
+          <div class="name" style="font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; margin-top:2px;">Frames</div>
+        </div>
+        <div class="stat-card" style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 12px; border:0.5px solid var(--color-border-tertiary);">
+          <div class="count" style="color:var(--color-text-warning); font-size:18px; font-weight:700;">${summary.fps_original || 0}</div>
+          <div class="name" style="font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; margin-top:2px;">FPS gốc</div>
+        </div>
+        <div class="stat-card" style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 12px; border:0.5px solid var(--color-border-tertiary);">
+          <div class="count" style="color:var(--color-text-success); font-size:18px; font-weight:700;">${summary.inference_ms_avg || 0}</div>
+          <div class="name" style="font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; margin-top:2px;">Avg ms / infer</div>
+        </div>
+        <div class="stat-card" style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 12px; border:0.5px solid var(--color-border-tertiary);">
+          <div class="count" style="color:var(--color-text-primary); font-size:18px; font-weight:700;">${summary.processing_fps ?? "—"}</div>
+          <div class="name" style="font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; margin-top:2px;">FPS xử lý</div>
+        </div>
+      `;
+
+      const tgt = summary.target_detect_fps;
+      const stride = summary.detection_stride;
+      const extraPills = [
+        tgt != null && tgt > 0 ? `<div class="summary-pill">Target detect ${tgt} fps</div>` : "",
+        stride && stride > 1 ? `<div class="summary-pill">Stride ${stride}</div>` : "",
+      ].filter(Boolean).join("");
+      elements.summaryRow.innerHTML = `
+        <div class="summary-pill">Task detect</div>
+        <div class="summary-pill">Model ${data.model?.loaded_from_name || "unknown"}</div>
+        <div class="summary-pill">Media video</div>
+        <div class="summary-pill">Resolution ${summary.resolution || "unknown"}</div>
+        <div class="summary-pill">Detections ${summary.total_detections || 0}</div>
+        <div class="summary-pill">Layout ${data.preprocessing.source_layout}</div>
+        <div class="summary-pill">Fisheye ${data.preprocessing.enabled ? "on" : "off"}</div>
+        ${extraPills}
+      `;
+
+      if (!orderedClasses.length) {
+        elements.detectionList.innerHTML = '<div class="placeholder" style="max-width:none;">No objects were accumulated across the processed frames.</div>';
+        return;
+      }
+
+      elements.detectionList.innerHTML = orderedClasses.map(([className, count]) => `
+        <div class="det-item">
+          <div class="det-main">
+            <div class="det-class">
+              <span class="det-dot" style="background:${CLASS_COLORS[className] || "#ffffff"}"></span>
+              <span>${className}</span>
+            </div>
+            <div class="det-meta">${count}</div>
+          </div>
+          <div class="det-meta">Accumulated detections across all frames</div>
+        </div>
+      `).join("");
+    }
+
+    function renderExternalCameraSummary(data) {
+      const counts = data.summary.class_counts || {};
+      elements.statsGrid.innerHTML = CLASS_NAMES.map((name) => `
+        <div class="stat-card" style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 12px; border:0.5px solid var(--color-border-tertiary);">
+          <div class="count" style="color:${CLASS_COLORS[name] || "#ffffff"}; font-size:18px; font-weight:700;">${counts[name] || 0}</div>
+          <div class="name" style="font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; margin-top:2px;">${name}</div>
+        </div>
+      `).join("");
+
+      elements.summaryRow.innerHTML = `
+        <div class="summary-pill">Task detect</div>
+        <div class="summary-pill">Model ${data.model?.loaded_from_name || "unknown"}</div>
+        <div class="summary-pill">External camera count ${data.camera_count}</div>
+        <div class="summary-pill">Objects ${data.summary.total_objects || 0}</div>
+        <div class="summary-pill">Avg inference ${data.summary.inference_ms || 0} ms</div>
+        <div class="summary-pill">Layout ${data.preprocessing.source_layout}</div>
+        <div class="summary-pill">Fisheye ${data.preprocessing.enabled ? "on" : "off"}</div>
+      `;
+
+      const orderedClasses = Object.entries(counts).sort((left, right) => right[1] - left[1]);
+      if (!orderedClasses.length) {
+        elements.detectionList.innerHTML = '<div class="placeholder" style="max-width:none;">Không có đối tượng nào được cộng dồn từ camera đã trích xuất.</div>';
+        return;
+      }
+
+      elements.detectionList.innerHTML = orderedClasses.map(([className, count]) => `
+        <div class="det-item">
+          <div class="det-main">
+            <div class="det-class">
+              <span class="det-dot" style="background:${CLASS_COLORS[className] || "#ffffff"}"></span>
+              <span>${className}</span>
+            </div>
+            <div class="det-meta">${count}</div>
+          </div>
+          <div class="det-meta">Accumulated detections across the extracted camera feed</div>
+        </div>
+      `).join("");
+    }
+
+    function attachExternalCameraLiveStreams() {
+      const streamSeed = Date.now();
+      renderMedia(
+        elements.resultMedia,
+        `/api/external-camera/live/stream?view=overview&_=${streamSeed}`,
+        "image",
+      );
+
+      elements.externalCameraResults.replaceChildren();
+      const article = document.createElement("article");
+      article.className = "external-result-item";
+      const img = document.createElement("img");
+      img.src = `/api/external-camera/live/stream?view=camera_1&_=${streamSeed}`;
+      img.alt = "External camera live detect";
+      const copy = document.createElement("div");
+      copy.className = "external-result-copy";
+      const titleEl = document.createElement("strong");
+      titleEl.textContent = "Live detect stream";
+      const meta = document.createElement("span");
+      meta.textContent = "MJPEG annotated feed";
+      copy.appendChild(titleEl);
+      copy.appendChild(meta);
+      article.appendChild(img);
+      article.appendChild(copy);
+      elements.externalCameraResults.appendChild(article);
+    }
+
+    function setExternalCameraLiveButtons(isRunning) {
+      elements.externalCameraLiveStart.disabled = isRunning;
+      elements.externalCameraLiveStop.disabled = !isRunning;
+    }
+
+    function syncExternalCameraLivePolling(isRunning) {
+      if (state.livePollTimer) {
+        window.clearInterval(state.livePollTimer);
+        state.livePollTimer = null;
+      }
+      if (isRunning) {
+        const tick = () => {
+          loadExternalCameraLiveStatus(true);
+        };
+        const ms = getLiveUiPollMs();
+        state.livePollTimer = window.setInterval(tick, ms);
+        tick();
+      }
+    }
+
+    function renderExternalCameraLiveStatus(data, options = {}) {
+      const forceRedraw = Boolean(options.forceRedraw);
+      const running = Boolean(data.running);
+      const statusLabel = String(data.status || (running ? "active" : "stopped")).toUpperCase();
+      const lastUpdated = data.last_updated_at || "not updated yet";
+      const interval = Number(data.interval_seconds || elements.externalCameraLiveInterval.value || 0);
+      const targetFps = interval > 0 ? (1 / interval).toFixed(1) : "0.0";
+      const cycleCount = data.cycle_count || 0;
+      const uiPollMs = getLiveUiPollMs();
+      const uiFpsLabel = (1000 / uiPollMs).toFixed(1);
+      const actualCycleFps = data.actual_cycle_fps != null ? Number(data.actual_cycle_fps).toFixed(2) : "—";
+      const cycleDurationMs = data.last_cycle_duration_ms != null ? Number(data.last_cycle_duration_ms).toFixed(1) : "—";
+      const errorBlock = data.error ? `<span>Error: ${escapeHtml(data.error)}</span>` : "";
+
+      elements.externalCameraLiveStatus.innerHTML = `
+        <strong>Live monitor ${statusLabel}</strong>
+        <span>Target cycle ${interval.toFixed(1)}s | Target ${targetFps} fps | Actual ${actualCycleFps} fps | Cycle ${cycleDurationMs} ms | UI ~${uiFpsLabel} fps (${uiPollMs}ms) | Cycles ${cycleCount} | Updated ${lastUpdated}</span>
+        ${errorBlock}
+      `;
+
+      setExternalCameraLiveButtons(running);
+      if (running !== state.liveMonitorRunning) {
+        state.liveMonitorRunning = running;
+        state.liveStreamAttached = false;
+        state.lastLiveCycleCount = null;
+        state.lastLiveUpdatedAt = null;
+        syncExternalCameraLivePolling(running);
+      }
+
+      if (running && data.stream_ready && !state.liveStreamAttached) {
+        attachExternalCameraLiveStreams();
+        state.liveStreamAttached = true;
+      }
+
+      const liveResult = data.last_result;
+      if (!liveResult) {
+        return;
+      }
+
+      const lastUpdatedRaw = data.last_updated_at || null;
+      const framesAdvanced =
+        forceRedraw ||
+        !running ||
+        cycleCount !== state.lastLiveCycleCount ||
+        lastUpdatedRaw !== state.lastLiveUpdatedAt;
+
+      if (running && !framesAdvanced) {
+        return;
+      }
+
+      if (running) {
+        state.lastLiveCycleCount = cycleCount;
+        state.lastLiveUpdatedAt = lastUpdatedRaw;
+        if (!data.stream_ready) {
+          resetDownloads();
+          state.latestRecord = null;
+          elements.requestId.textContent = "live-monitor";
+          elements.savedResult.textContent = "warming up";
+          elements.preprocessedMeta.textContent = liveResult.preprocessing.enabled ? "fisheye snapshots" : "raw snapshots";
+          elements.resultMeta.textContent = `${liveResult.camera_count} cameras`;
+          const liveBustToken = `${cycleCount}-${String(lastUpdatedRaw || "").replace(/\D/g, "").slice(-12)}`;
+          renderMedia(elements.resultMedia, liveResult.overview, "image", liveBustToken);
+          renderExternalCameraGrid(liveResult, liveBustToken);
+          renderExternalCameraSummary(liveResult);
+          return;
+        }
+        renderExternalCameraSummary(liveResult);
+        elements.requestId.textContent = "live-monitor";
+        elements.savedResult.textContent = "mjpeg stream";
+        elements.preprocessedMeta.textContent = liveResult.preprocessing.enabled ? "fisheye streaming" : "raw streaming";
+        elements.resultMeta.textContent = `${liveResult.camera_count} cameras`;
+        return;
+      }
+
+      resetDownloads();
+      state.latestRecord = null;
+      elements.requestId.textContent = "live-monitor";
+      elements.savedResult.textContent = running ? "live memory" : "live snapshot";
+      elements.preprocessedMeta.textContent = liveResult.preprocessing.enabled ? "fisheye snapshots" : "raw snapshots";
+      elements.resultMeta.textContent = `${liveResult.camera_count} cameras`;
+      const liveBustToken = `${cycleCount}-${String(lastUpdatedRaw || "").replace(/\D/g, "").slice(-12)}`;
+      renderMedia(elements.resultMedia, liveResult.overview, "image", liveBustToken);
+      renderExternalCameraGrid(liveResult, liveBustToken);
+      renderExternalCameraSummary(liveResult);
+    }
+
+    function buildExternalCameraFormData() {
+      const formData = new FormData();
+      const inferredSourceLayout = elements.sourceLayout.value === "fisheye" ? "normal" : elements.sourceLayout.value;
+      formData.append("external_camera_url", elements.externalCameraUrl.value);
+      formData.append("camera_limit", "1");
+      formData.append("model_key", elements.modelKey.value);
+      formData.append("conf", elements.confidence.value);
+      formData.append("iou", elements.iou.value);
+      formData.append("source_layout", inferredSourceLayout);
+      formData.append("fisheye_strength", elements.fisheyeStrength.value);
+      formData.append("fisheye_radius", elements.fisheyeRadius.value);
+      formData.append("fisheye_effect", elements.fisheyeEffect.value);
+
+      const applyValue = getRequestedFisheyeState();
+      if (applyValue) {
+        formData.append("apply_fisheye", applyValue);
+      }
+      return formData;
+    }
+
+    async function loadExternalCameraLiveStatus(silent = false, options = {}) {
+      try {
+        const response = await fetch("/api/external-camera/live/status", { cache: "no-store" });
+        const data = await response.json();
+        renderExternalCameraLiveStatus(data, options);
+      } catch (error) {
+        console.error("Failed to load external live status:", error);
+        if (!silent) {
+          setToast("Failed to load live monitor status.");
+        }
+      }
+    }
+
+    async function startExternalCameraLive() {
+      const formData = buildExternalCameraFormData();
+      formData.append("interval_seconds", elements.externalCameraLiveInterval.value || "1.0");
+
+      try {
+        const response = await fetch("/api/external-camera/live/start", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to start live monitor");
+        }
+
+        renderExternalCameraLiveStatus(data);
+        await loadExternalCameraLiveStatus(true);
+        setToast("External live monitor started.", true);
+      } catch (error) {
+        setToast(error.message || "Failed to start live monitor.");
+      }
+    }
+
+    async function stopExternalCameraLive() {
+      try {
+        const response = await fetch("/api/external-camera/live/stop", { method: "POST" });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to stop live monitor");
+        }
+
+        renderExternalCameraLiveStatus(data);
+        setToast("External live monitor stopped.", true);
+      } catch (error) {
+        setToast(error.message || "Failed to stop live monitor.");
+      }
+    }
+
+    function renderConversionSummary(data) {
+      elements.statsGrid.innerHTML = `
+        <div class="stat-card" style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 12px; border:0.5px solid var(--color-border-tertiary);">
+          <div class="count" style="color:var(--color-text-info); font-size:18px; font-weight:700;">${data.media_type}</div>
+          <div class="name" style="font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; margin-top:2px;">Media type</div>
+        </div>
+        <div class="stat-card" style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 12px; border:0.5px solid var(--color-border-tertiary);">
+          <div class="count" style="color:var(--color-text-warning); font-size:18px; font-weight:700;">${data.preprocessing.effect}</div>
+          <div class="name" style="font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; margin-top:2px;">Effect</div>
+        </div>
+        <div class="stat-card" style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 12px; border:0.5px solid var(--color-border-tertiary);">
+          <div class="count" style="color:var(--color-text-success); font-size:18px; font-weight:700;">${Number(data.preprocessing.strength).toFixed(2)}</div>
+          <div class="name" style="font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; margin-top:2px;">Strength</div>
+        </div>
+      `;
+
+      const videoInfo = data.video_info;
+      elements.summaryRow.innerHTML = `
+        <div class="summary-pill">Task convert</div>
+        <div class="summary-pill">Layout ${data.preprocessing.source_layout}</div>
+        <div class="summary-pill">Radius ${Number(data.preprocessing.radius).toFixed(2)}</div>
+        ${videoInfo ? `<div class="summary-pill">Frames ${videoInfo.processed_frames}</div>` : ""}
+        ${videoInfo ? `<div class="summary-pill">Duration ${videoInfo.duration_seconds}s</div>` : ""}
+      `;
+
+      elements.detectionList.innerHTML = '<div class="placeholder" style="max-width:none;">Conversion completed. Use the saved artifacts to inspect the warped fisheye media.</div>';
+    }
+
+    function renderHistory(items) {
+      elements.recentRunCount.textContent = String(items.length);
+      if (!items.length) {
+        elements.historyList.innerHTML = '<div class="placeholder" style="max-width:none;">No saved runs yet. Execute detection or conversion once to populate history.</div>';
+        return;
+      }
+
+      elements.historyList.innerHTML = items.map((item) => {
+        const actionLinks = Object.entries(item.artifact_urls || {}).map(([key, url]) => `
+          <a class="tiny-link" href="${url}" target="_blank" rel="noopener">${key.replaceAll("_", " ")}</a>
+        `).join("");
+
+        let summary = `${item.media_type} | ${item.summary.output_kind || "fisheye"}`;
+        if (item.task === "detect" && item.media_type === "image") {
+          summary = `${item.summary.total_objects} obj | ${item.summary.inference_ms} ms`;
+        } else if (item.task === "detect" && item.media_type === "video") {
+          summary = `${item.summary.total_frames} frames | ${item.summary.inference_ms_avg} ms/frame`;
+        }
+
+        return `
+          <div class="history-item">
+            <div class="history-main">
+              <div>
+                <strong>${item.filename || item.id}</strong>
+                <div class="history-sub">${item.id}</div>
+              </div>
+              <div class="history-sub">${item.task} | ${summary}</div>
+            </div>
+            <div class="history-sub">${item.created_at}</div>
+            <div class="history-actions">${actionLinks}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderHealth(health) {
+      const model = health.model || {};
+      elements.statusModel.textContent = model.loaded_from_name || model.source || "unloaded";
+      elements.statusPath.textContent = model.loaded_from || model.candidate || "not resolved";
+      elements.statusDevice.textContent = health.device || model.device || "cpu";
+      elements.statusResults.textContent = health.storage.results_dir || "unknown";
+      elements.topDevice.textContent = health.device || model.device || "cpu";
+      elements.modelSource.textContent = model.source || "unknown";
+    }
+
+    async function loadHealth() {
+      const response = await fetch("/api/health");
+      const data = await response.json();
+      renderHealth(data);
+    }
+
+    async function loadHistory() {
+      const response = await fetch("/api/history");
+      const data = await response.json();
+      renderHistory(data.items || []);
+    }
+
+    async function loadStats() {
+      if (elements.statsRefreshBtn) {
+        elements.statsRefreshBtn.textContent = "…";
+      }
+
+      try {
+        const response = await fetch("/api/stats");
+        const data = await response.json();
+        renderStatCards(data);
+        renderClassChart(data.class_totals || {});
+      } catch (error) {
+        console.error("Failed to load stats:", error);
+      } finally {
+        if (elements.statsRefreshBtn) {
+          elements.statsRefreshBtn.textContent = "↻";
+        }
+      }
+    }
+
+    function renderStatCards(data) {
+      const totalRuns = Number(data.total_runs || 0);
+      if (totalRuns === 0) {
+        elements.statTotal.textContent = "—";
+        elements.statDetect.textContent = "—";
+        elements.statConvert.textContent = "—";
+        elements.statInference.textContent = "—";
+        return;
+      }
+
+      elements.statTotal.textContent = String(data.total_runs ?? "—");
+      elements.statDetect.textContent = String(data.total_detect ?? "—");
+      elements.statConvert.textContent = String(data.total_convert ?? "—");
+      elements.statInference.textContent = data.avg_inference_ms ? `${data.avg_inference_ms} ms` : "—";
+    }
+
+    function renderClassChart(classTotals) {
+      const canvas = elements.classChart;
+      const empty = elements.chartEmpty;
+      if (!canvas) {
+        return;
+      }
+
+      const labels = Object.keys(classTotals);
+      const values = Object.values(classTotals);
+
+      if (!labels.length) {
+        canvas.style.display = "none";
+        if (empty) {
+          empty.style.display = "block";
+        }
+        return;
+      }
+
+      canvas.style.display = "block";
+      if (empty) {
+        empty.style.display = "none";
+      }
+
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const pad = { top: 30, right: 20, bottom: 52, left: 56 };
+      const chartWidth = canvas.width - pad.left - pad.right;
+      const chartHeight = canvas.height - pad.top - pad.bottom;
+      const maxValue = Math.max(...values, 1);
+      const slotWidth = chartWidth / labels.length;
+      const barWidth = slotWidth * 0.55;
+      const orderedColors = labels.map((label) => CLASS_COLORS[label] || "#8ea4b5");
+
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "#93aab9";
+      ctx.font = "11px Inter, sans-serif";
+      ctx.textAlign = "right";
+
+      const gridLines = 4;
+      for (let index = 0; index <= gridLines; index += 1) {
+        const y = pad.top + chartHeight - (index / gridLines) * chartHeight;
+        const labelValue = Math.round((index / gridLines) * maxValue);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + chartWidth, y);
+        ctx.stroke();
+        ctx.fillText(String(labelValue), pad.left - 8, y + 4);
+      }
+
+      labels.forEach((label, index) => {
+        const value = values[index];
+        const barHeight = (value / maxValue) * chartHeight;
+        const x = pad.left + index * slotWidth + (slotWidth - barWidth) / 2;
+        const y = pad.top + chartHeight - barHeight;
+        const radius = 4;
+
+        ctx.fillStyle = orderedColors[index];
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + barWidth - radius, y);
+        ctx.arcTo(x + barWidth, y, x + barWidth, y + radius, radius);
+        ctx.lineTo(x + barWidth, y + barHeight);
+        ctx.lineTo(x, y + barHeight);
+        ctx.lineTo(x, y + radius);
+        ctx.arcTo(x, y, x + radius, y, radius);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = "#edf5fb";
+        ctx.font = "12px IBM Plex Mono, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(String(value), x + barWidth / 2, y - 8);
+
+        ctx.fillStyle = "#93aab9";
+        ctx.font = "11px Inter, sans-serif";
+        ctx.fillText(label, x + barWidth / 2, pad.top + chartHeight + 22);
+      });
+
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, pad.top);
+      ctx.lineTo(pad.left, pad.top + chartHeight);
+      ctx.lineTo(pad.left + chartWidth, pad.top + chartHeight);
+      ctx.stroke();
+    }
+
+    function clearCurrentFile() {
+      state.currentFile = null;
+      state.currentMediaType = null;
+      if (state.currentObjectUrl) {
+        URL.revokeObjectURL(state.currentObjectUrl);
+      }
+      state.currentObjectUrl = null;
+      elements.fileInput.value = "";
+      elements.selectedFile.textContent = "none";
+      elements.selectedType.textContent = "unknown";
+      elements.selectedSize.textContent = "unknown";
+      elements.originalMeta.textContent = "waiting";
+      renderPlaceholder(elements.originalMedia, "The uploaded image or video preview will appear here.");
+      resetResultView();
+      setLoading(false);
+      updateButtonsForCurrentFile();
+    }
+
+    function updateVideoDetectFpsVisibility() {
+      const show = state.currentMediaType === "video";
+      elements.videoDetectFpsWrap.style.display = show ? "" : "none";
+      if (!show) {
+        elements.videoDetectFps.value = "";
+      }
+    }
+
+    function updateButtonsForCurrentFile() {
+      const hasFile = !!state.currentFile;
+      elements.detectBtn.disabled = !hasFile;
+      elements.convertBtn.disabled = !hasFile;
+      updateVideoDetectFpsVisibility();
+    }
+
+    function handleSelectedFile(file) {
+      if (!file) {
+        return;
+      }
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+      if (!isImage && !isVideo) {
+        setToast("Please choose an image or video file.");
+        return;
+      }
+
+      state.currentFile = file;
+      state.currentMediaType = isVideo ? "video" : "image";
+      if (state.currentObjectUrl) {
+        URL.revokeObjectURL(state.currentObjectUrl);
+      }
+      state.currentObjectUrl = URL.createObjectURL(file);
+      renderMedia(elements.originalMedia, state.currentObjectUrl, state.currentMediaType);
+      elements.originalMeta.textContent = `${(file.size / 1024).toFixed(0)} KB`;
+      elements.selectedFile.textContent = file.name;
+      elements.selectedType.textContent = state.currentMediaType;
+      resetResultView();
+      updateButtonsForCurrentFile();
+
+      if (state.currentMediaType === "image") {
+        const probe = new Image();
+        probe.onload = () => {
+          elements.selectedSize.textContent = `${probe.naturalWidth} x ${probe.naturalHeight}`;
+        };
+        probe.src = state.currentObjectUrl;
+      } else {
+        const probe = document.createElement("video");
+        probe.preload = "metadata";
+        probe.onloadedmetadata = () => {
+          elements.selectedSize.textContent = `${probe.videoWidth} x ${probe.videoHeight}`;
+        };
+        probe.src = state.currentObjectUrl;
+      }
+    }
+
+    async function runDetection() {
+      if (!state.currentFile) {
+        setToast("Select an image or video first.");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await fetch("/api/detect", {
+          method: "POST",
+          body: buildFormData("file"),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Detection failed");
+        }
+
+        state.latestRecord = data.record;
+        elements.requestId.textContent = data.request_id;
+        elements.savedResult.textContent = data.record.id;
+        elements.preprocessedMeta.textContent = data.preprocessing.enabled ? "fisheye ready" : "bypassed";
+
+        if (data.media_type === "video") {
+          elements.resultMeta.textContent = `${data.summary.total_frames} frames`;
+          const previewAnnotated = data.record.artifact_urls?.preview_annotated || null;
+          renderMedia(elements.preprocessedMedia, previewAnnotated, "image");
+          renderMedia(elements.resultMedia, data.record.artifact_urls?.annotated_video || null, "video");
+          renderVideoDetectionSummary(data);
+          setArtifactLinks(data.record, "annotated_video");
+        } else {
+          elements.resultMeta.textContent = `${data.inference_ms} ms`;
+          renderMedia(elements.preprocessedMedia, data.preprocessed, "image");
+          renderMedia(elements.resultMedia, data.result, "image");
+          renderDetectionSummary(data);
+          setArtifactLinks(data.record, "annotated");
+        }
+
+        await Promise.all([loadHistory(), loadHealth(), loadStats()]);
+        const successMessage = data.media_type === "video"
+          ? `Saved video detection ${data.record.id} with ${data.summary.total_frames} frames.`
+          : `Saved run ${data.record.id} with ${data.total_objects} detections.`;
+        setToast(successMessage, true);
+      } catch (error) {
+        setToast(error.message || "Detection failed.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function runConversion() {
+      if (!state.currentFile) {
+        setToast("Select an image or video first.");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await fetch("/api/convert", {
+          method: "POST",
+          body: buildFormData("media"),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Conversion failed");
+        }
+
+        state.latestRecord = data.record;
+        elements.requestId.textContent = data.request_id;
+        elements.savedResult.textContent = data.record.id;
+        elements.preprocessedMeta.textContent = `${data.preprocessing.effect} | ${Number(data.preprocessing.strength).toFixed(2)}`;
+
+        if (data.media_type === "image") {
+          renderMedia(elements.preprocessedMedia, data.result, "image");
+          renderMedia(elements.resultMedia, data.result, "image");
+          elements.resultMeta.textContent = "fisheye image";
+          setArtifactLinks(data.record, "fisheye_image");
+        } else {
+          renderMedia(elements.preprocessedMedia, data.preview_result, "image");
+          renderMedia(elements.resultMedia, data.record.artifact_urls.fisheye_video, "video");
+          elements.resultMeta.textContent = `${data.video_info.processed_frames} frames`;
+          setArtifactLinks(data.record, "fisheye_video");
+        }
+
+        renderConversionSummary(data);
+        await Promise.all([loadHistory(), loadHealth(), loadStats()]);
+        setToast(`Saved fisheye conversion ${data.record.id}.`, true);
+      } catch (error) {
+        setToast(error.message || "Conversion failed.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function runExternalCameraDetection() {
+      const formData = buildExternalCameraFormData();
+
+      setLoading(true);
+      try {
+        const response = await fetch("/api/external-camera/detect", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "External camera detection failed");
+        }
+
+        state.latestRecord = data.record;
+        elements.requestId.textContent = data.request_id;
+        elements.savedResult.textContent = data.record.id;
+        elements.preprocessedMeta.textContent = data.preprocessing.enabled ? "fisheye snapshots" : "raw snapshots";
+        elements.resultMeta.textContent = `${data.camera_count} cameras`;
+        renderMedia(elements.resultMedia, data.overview, "image");
+        renderExternalCameraGrid(data);
+        renderExternalCameraSummary(data);
+        setArtifactLinks(data.record, "overview_annotated");
+
+        await Promise.all([loadHistory(), loadHealth(), loadStats()]);
+        setToast(`Saved external camera detection ${data.record.id} for ${data.camera_count} cameras.`, true);
+      } catch (error) {
+        setToast(error.message || "External camera detection failed.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    elements.uploadZone.addEventListener("click", () => elements.fileInput.click());
+    elements.fileInput.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        handleSelectedFile(file);
+      }
+    });
+    elements.uploadZone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      elements.uploadZone.classList.add("drag");
+    });
+    elements.uploadZone.addEventListener("dragleave", () => {
+      elements.uploadZone.classList.remove("drag");
+    });
+    elements.uploadZone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      elements.uploadZone.classList.remove("drag");
+      const file = event.dataTransfer.files[0];
+      if (file) {
+        handleSelectedFile(file);
+      }
+    });
+
+    [
+      elements.confidence,
+      elements.iou,
+      elements.fisheyeStrength,
+      elements.fisheyeRadius,
+    ].forEach((element) => element.addEventListener("input", updateControlLabels));
+
+    elements.detectBtn.addEventListener("click", runDetection);
+    elements.convertBtn.addEventListener("click", runConversion);
+    elements.clearBtn.addEventListener("click", clearCurrentFile);
+    elements.refreshHistory.addEventListener("click", loadHistory);
+    elements.statsRefreshBtn.addEventListener("click", loadStats);
+    elements.externalCameraLoad.addEventListener("click", () => loadExternalCamera());
+    elements.externalCameraDetect.addEventListener("click", runExternalCameraDetection);
+    elements.externalCameraLiveStart.addEventListener("click", startExternalCameraLive);
+    elements.externalCameraLiveStop.addEventListener("click", stopExternalCameraLive);
+    elements.externalCameraLiveRefresh.addEventListener("click", () => loadExternalCameraLiveStatus(false, { forceRedraw: true }));
+    elements.externalCameraLiveUiFps.addEventListener("input", () => {
+      if (state.liveMonitorRunning) {
+        syncExternalCameraLivePolling(true);
+      }
+    });
+    elements.externalCameraUrl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        loadExternalCamera();
+      }
+    });
+
+    async function boot() {
+      renderLegend();
+      updateControlLabels();
+      renderPlaceholder(elements.originalMedia, "The uploaded image or video preview will appear here.");
+      renderPlaceholder(elements.preprocessedMedia, "If preprocessing is enabled, the warped fisheye output will appear here.");
+      renderPlaceholder(elements.resultMedia, "Detection annotations or converted fisheye video will appear here.");
+
+      try {
+        setExternalCameraLiveButtons(false);
+        await Promise.all([loadHealth(), loadHistory(), loadStats(), loadExternalCameraLiveStatus(true)]);
+        await loadExternalCamera();
+      } catch (error) {
+        setToast(`Failed to load system metadata: ${error.message}`);
+      }
+      nav("dash");
+    }
+
+    boot();
+  </script>
+</body>
+
+</html>
