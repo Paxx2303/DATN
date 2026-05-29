@@ -107,7 +107,8 @@ sleep 45
 
 echo "=== [4/5] Preparing and Uploading Code to VM ==="
 # Create temporary package of deployment files
-TAR_FILE="fisheye_deploy.tar.gz"
+TAR_FILE_NAME="fisheye_deploy.tar.gz"
+TAR_FILE="/tmp/${TAR_FILE_NAME}"
 echo "Packaging source files and model weights..."
 tar --exclude='venv' \
     --exclude='.git' \
@@ -117,17 +118,16 @@ tar --exclude='venv' \
     --exclude='recent_images.sqlite3' \
     --exclude='static/results/*' \
     --exclude='static/uploads/*' \
-    --exclude='fisheye_deploy.tar.gz' \
     -czf "${TAR_FILE}" -C . .
 
 echo "Uploading deployment package to VM..."
-gcloud compute scp "${TAR_FILE}" "${INSTANCE_NAME}:~/" --zone="${ZONE}"
+gcloud compute scp "${TAR_FILE}" "${INSTANCE_NAME}:~/${TAR_FILE_NAME}" --zone="${ZONE}"
 
 echo "Extracting code on VM..."
 gcloud compute ssh "${INSTANCE_NAME}" --zone="${ZONE}" --command "
   mkdir -p ~/fisheye_app
-  tar -xzf ~/${TAR_FILE} -C ~/fisheye_app
-  rm ~/${TAR_FILE}
+  tar -xzf ~/${TAR_FILE_NAME} -C ~/fisheye_app
+  rm ~/${TAR_FILE_NAME}
 "
 # Clean up local archive
 rm "${TAR_FILE}"
