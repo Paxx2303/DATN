@@ -10,6 +10,10 @@ PROJECT_ID="${GCP_PROJECT_ID:-project-ef8a8694-e33d-4954-ad1}"
 REGION="asia-southeast1"
 ZONE="${REGION}-b"
 
+# VM Instance Configuration (Default to CPU mode)
+INSTANCE_NAME="${GCP_INSTANCE_NAME:-fisheye-cpu-instance}"
+COMPOSE_FILE="${GCP_COMPOSE_FILE:-deploy/docker-compose.prod-cpu.yml}"
+
 # Cloud SQL
 DB_INSTANCE_NAME="fisheye-db"
 DB_NAME="fisheye_db"
@@ -232,18 +236,18 @@ echo "SA Key file        : ${SA_KEY_FILE}"
 echo ""
 echo "NEXT STEPS:"
 echo "  1. Copy ${SA_KEY_FILE} vào VM:"
-echo "     gcloud compute scp ${SA_KEY_FILE} fisheye-gpu-instance:~/fisheye_app/ --zone=${ZONE}"
+echo "     gcloud compute scp ${SA_KEY_FILE} ${INSTANCE_NAME}:~/fisheye_app/ --zone=${ZONE}"
 echo ""
 echo "  2. Copy .env.production vào VM:"
-echo "     gcloud compute scp .env.production fisheye-gpu-instance:~/fisheye_app/.env --zone=${ZONE}"
+echo "     gcloud compute scp .env.production ${INSTANCE_NAME}:~/fisheye_app/.env --zone=${ZONE}"
 echo ""
 echo "  3. SSH vào VM và chạy:"
-echo "     gcloud compute ssh fisheye-gpu-instance --zone=${ZONE}"
+echo "     gcloud compute ssh ${INSTANCE_NAME} --zone=${ZONE}"
 echo "     cd ~/fisheye_app"
-echo "     sudo docker compose -f deploy/docker-compose.prod.yml up --build -d"
+echo "     sudo docker compose -f ${COMPOSE_FILE} up --build -d"
 echo ""
 echo "  4. Truy cập app:"
-VM_IP=$(gcloud compute instances describe fisheye-gpu-instance --zone="${ZONE}" \
+VM_IP=$(gcloud compute instances describe "${INSTANCE_NAME}" --zone="${ZONE}" \
     --format='get(networkInterfaces[0].accessConfigs[0].natIP)' 2>/dev/null || echo "N/A")
 echo "     http://${VM_IP}:5000"
 echo "============================================================"

@@ -247,6 +247,35 @@ CREATE TABLE IF NOT EXISTS incident_configs (
     user_id         TEXT,
     PRIMARY KEY (camera_id)
 );
+
+CREATE TABLE IF NOT EXISTS vehicle_speeds (
+    id              BIGSERIAL PRIMARY KEY,
+    track_id        TEXT NOT NULL,
+    camera_source   TEXT NOT NULL,
+    class_name      TEXT NOT NULL,
+    speed_kmh       REAL NOT NULL,
+    is_overspeed    BOOLEAN DEFAULT FALSE,
+    cx              REAL,
+    cy              REAL,
+    timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_vehicle_speeds_timestamp ON vehicle_speeds(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_vehicle_speeds_overspeed ON vehicle_speeds(is_overspeed);
+
+CREATE TABLE IF NOT EXISTS congestion_logs (
+    id              BIGSERIAL PRIMARY KEY,
+    roi_name        TEXT NOT NULL,
+    camera_source   TEXT NOT NULL,
+    actual_count    INTEGER NOT NULL,
+    capacity        INTEGER NOT NULL,
+    congestion_ratio REAL NOT NULL,
+    state           TEXT NOT NULL,
+    timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_congestion_logs_timestamp ON congestion_logs(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_congestion_logs_roi ON congestion_logs(roi_name);
 """
 
 _SCHEMA_SQLITE = """
@@ -347,6 +376,33 @@ CREATE TABLE IF NOT EXISTS incident_configs (
     user_id         TEXT,
     PRIMARY KEY (camera_id)
 );
+
+CREATE TABLE IF NOT EXISTS vehicle_speeds (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    track_id        TEXT NOT NULL,
+    camera_source   TEXT NOT NULL,
+    class_name      TEXT NOT NULL,
+    speed_kmh       REAL NOT NULL,
+    is_overspeed    INTEGER DEFAULT 0,
+    cx              REAL,
+    cy              REAL,
+    timestamp       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vehicle_speeds_timestamp ON vehicle_speeds(timestamp DESC);
+
+CREATE TABLE IF NOT EXISTS congestion_logs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    roi_name        TEXT NOT NULL,
+    camera_source   TEXT NOT NULL,
+    actual_count    INTEGER NOT NULL,
+    capacity        INTEGER NOT NULL,
+    congestion_ratio REAL NOT NULL,
+    state           TEXT NOT NULL,
+    timestamp       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_congestion_logs_timestamp ON congestion_logs(timestamp DESC);
 """
 
 
@@ -1087,3 +1143,98 @@ def health_check() -> dict[str, Any]:
         return {"status": "ok", "backend": _backend}
     except Exception as exc:
         return {"status": "error", "backend": _backend, "error": str(exc)}
+
+
+# ── Vehicle Speeds CRUD ──────────────────────────────────────────────────────
+
+def insert_vehicle_speed(
+    track_id: str,
+    camera_source: str,
+    class_name: str,
+    speed_kmh: float,
+    is_overspeed: bool | int,
+    cx: float | None = None,
+    cy: float | None = None,
+    timestamp: str | None = None,
+) -> None:
+    """Lưu log tốc độ của một phương tiện."""
+    if _backend == "none":
+        init_db()
+
+    sql = _adapt_sql("""
+        INSERT INTO vehicle_speeds (track_id, camera_source, class_name, speed_kmh, is_overspeed, cx, cy, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """)
+    
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc).isoformat()
+    if isinstance(is_overspeed, bool):
+        is_overspeed = 1 if is_overspeed else 0
+
+    params = (track_id, camera_source, class_name, speed_kmh, is_overspeed, cx, cy, timestamp)
+    with get_conn() as conn:
+        conn.cursor().execute(sql, params)
+
+
+def list_vehicle_speeds(limit: int = 100, overspeed_only: bool = False) -> list[dict[str, Any]]:
+    """Lấy lịch sử tốc độ phương tiện gần nhất."""
+    if overspeed_only:
+        overspeed_val = "TRUE" if _backend == "postgres" else "1"
+        sql = _adapt_sql(
+            f"SELECT * FROM vehicle_speeds WHERE is_overspeed={overspeed_val} ORDER BY timestamp DESC LIMIT %s"
+        )
+    else:
+        sql = _adapt_sql("SELECT * FROM vehicle_speeds ORDER BY timestamp DESC LIMIT %s")
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (limit,))
+        rows = cur.fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
+# ── Congestion Logs CRUD ─────────────────────────────────────────────────────
+
+def insert_congestion_log(
+    roi_name: str,
+    camera_source: str,
+    actual_count: int,
+    capacity: int,
+    congestion_ratio: float,
+    state: str,
+    timestamp: str | None = None,
+) -> None:
+    """Lưu log mật độ / ùn tắc của một vùng ROI."""
+    if _backend == "none":
+        init_db()
+
+    sql = _adapt_sql("""
+        INSERT INTO congestion_logs (roi_name, camera_source, actual_count, capacity, congestion_ratio, state, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """)
+
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+    params = (roi_name, camera_source, actual_count, capacity, congestion_ratio, state, timestamp)
+    with get_conn() as conn:
+        conn.cursor().execute(sql, params)
+
+
+def list_congestion_logs(limit: int = 100, roi_name: str | None = None) -> list[dict[str, Any]]:
+    """Lấy danh sách log ùn tắc gần nhất."""
+    if roi_name:
+        sql = _adapt_sql(
+            "SELECT * FROM congestion_logs WHERE roi_name=%s ORDER BY timestamp DESC LIMIT %s"
+        )
+        params: tuple = (roi_name, limit)
+    else:
+        sql = _adapt_sql("SELECT * FROM congestion_logs ORDER BY timestamp DESC LIMIT %s")
+        params = (limit,)
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    return [_row_to_dict(row) for row in rows]
+

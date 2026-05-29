@@ -54,20 +54,28 @@ Script sẽ thực hiện tự động các công việc sau:
 
 ---
 
-## 3. Cấu hình chạy CPU (Nếu không dùng GPU)
+## 3. Deploy tự động qua chế độ CPU-Only (Tiết kiệm chi phí)
 
-Nếu bạn không được duyệt quota GPU hoặc muốn giảm chi phí tối đa (chạy CPU có giá ~25$/tháng so với ~700$/tháng khi có GPU):
+Nếu bạn không có quota GPU hoặc muốn giảm thiểu tối đa chi phí (~25 - 50$/tháng thay vì ~900$/tháng khi dùng GPU), chúng tôi đã cấu hình sẵn kịch bản chạy CPU tự động:
 
-1. **Sửa file `deploy/deploy_gcp.sh`**:
-   - Đổi `MACHINE_TYPE` thành `e2-standard-2` hoặc `e2-medium`.
-   - Xóa bỏ dòng tham số `--accelerator="${ACCELERATOR}" \`.
-   - Sửa phần script startup: Có thể bỏ phần cài đặt NVIDIA drivers và NVIDIA Container Toolkit để tăng tốc khởi động VM.
-2. **Sửa file `deploy/docker-compose.prod.yml`**:
-   - Đổi `FISHEYE_DEVICE` từ `0` thành `cpu`.
-   - Đổi `BASE_IMAGE` thành `python:3.10-slim`.
-   - Xóa bỏ block `deploy.resources.reservations` liên quan đến GPU nvidia.
+### Bước 1: Di chuyển vào thư mục dự án trên Cloud Shell
+```bash
+cd fisheye_demo
+```
+
+### Bước 2: Chạy script deploy CPU tự động
+```bash
+chmod +x deploy/deploy_gcp_cpu.sh
+./deploy/deploy_gcp_cpu.sh
+```
+
+Script này sẽ tự động:
+1. Tạo một máy ảo tiêu chuẩn `e2-standard-2` (`fisheye-cpu-instance`) mà không cần GPU hay xin quota đặc biệt nào.
+2. Cài đặt Docker & Docker Compose nhanh chóng (khoảng 1 phút).
+3. Đóng gói mã nguồn và tự động chạy ứng dụng bằng cấu hình tối ưu CPU `deploy/docker-compose.prod-cpu.yml`.
 
 ---
+
 
 ## 4. Quản lý hệ thống sau khi deploy
 

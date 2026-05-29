@@ -1,0 +1,103 @@
+services:
+  # ── Cloud SQL Auth Proxy ────────────────────────────────────────────────────
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.11.0
+    command:
+      - "--port=5432"
+      - "--address=0.0.0.0"
+      - "${CLOUD_SQL_INSTANCE_CONNECTION_NAME:-PROJECT:asia-southeast1:fisheye-db}"
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/service-account.json
+    volumes:
+      - cloud-sql-credentials:/secrets:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    profiles:
+      - cloud-sql
+
+  # ── Fisheye Web App (CPU Mode) ──────────────────────────────────────────────
+  fisheye-web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BASE_IMAGE: "${FISHEYE_BASE_IMAGE:-python:3.10-slim}"
+    image: fisheye-demo:prod-cpu
+    command:
+      - gunicorn
+      - --bind
+      - 0.0.0.0:5000
+      - --workers
+      - "${WEB_CONCURRENCY:-1}"
+      - --threads
+      - "${WEB_THREADS:-4}"
+      - --timeout
+      - "${WEB_TIMEOUT:-300}"
+      - wsgi:app
+    ports:
+      - "5000:5000"
+    environment:
+      # ── Inference ──────────────────────────────────────────────────────────
+      FISHEYE_DEFAULT_CONF: "${FISHEYE_DEFAULT_CONF:-0.25}"
+      FISHEYE_DEFAULT_IOU: "${FISHEYE_DEFAULT_IOU:-0.45}"
+      FISHEYE_DEVICE: "cpu"
+      FISHEYE_PRELOAD_MODEL: "${FISHEYE_PRELOAD_MODEL:-1}"
+      FISHEYE_IMPORT_PRELOAD_MODEL: "${FISHEYE_IMPORT_PRELOAD_MODEL:-0}"
+      FISHEYE_MAX_UPLOAD_MB: "${FISHEYE_MAX_UPLOAD_MB:-256}"
+      FISHEYE_MAX_VIDEO_SECONDS: "${FISHEYE_MAX_VIDEO_SECONDS:-180}"
+      # ── Storage ────────────────────────────────────────────────────────────
+      FISHEYE_UPLOAD_DIR: "/app/static/uploads"
+      FISHEYE_RESULTS_DIR: "/app/static/results"
+      FISHEYE_RECENT_IMAGE_DB: "/app/data/recent_images.sqlite3"
+      FISHEYE_RECENT_IMAGE_LIMIT: "${FISHEYE_RECENT_IMAGE_LIMIT:-100}"
+      # ── PostgreSQL (Cloud SQL) ─────────────────────────────────────────────
+      DATABASE_URL: "${DATABASE_URL:-}"
+      # ── Google Cloud Storage ───────────────────────────────────────────────
+      FISHEYE_CLOUD_STORAGE: "${FISHEYE_CLOUD_STORAGE:-0}"
+      GCS_BUCKET_NAME: "${GCS_BUCKET_NAME:-}"
+      GCS_PROJECT_ID: "${GCS_PROJECT_ID:-}"
+      FISHEYE_SNAPSHOT_TTL_HOURS: "${FISHEYE_SNAPSHOT_TTL_HOURS:-6}"
+      GCS_CREDENTIALS_JSON: "${GCS_CREDENTIALS_JSON:-}"
+      GOOGLE_APPLICATION_CREDENTIALS: "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+      # ── Alert thresholds ───────────────────────────────────────────────────
+      ALERT_THRESHOLD_TOTAL: "${ALERT_THRESHOLD_TOTAL:-15}"
+      ALERT_THRESHOLD_CAR: "${ALERT_THRESHOLD_CAR:-10}"
+      ALERT_THRESHOLD_BUS: "${ALERT_THRESHOLD_BUS:-3}"
+      ALERT_THRESHOLD_TRUCK: "${ALERT_THRESHOLD_TRUCK:-3}"
+      ALERT_THRESHOLD_PEDESTRIAN: "${ALERT_THRESHOLD_PEDESTRIAN:-8}"
+      ALERT_THRESHOLD_MOTORBIKE: "${ALERT_THRESHOLD_MOTORBIKE:-12}"
+      ALERT_COOLDOWN_SECONDS: "${ALERT_COOLDOWN_SECONDS:-60}"
+      # ── External camera ────────────────────────────────────────────────────
+      FISHEYE_EXTERNAL_CAMERA_SOURCE_MODE: "${FISHEYE_EXTERNAL_CAMERA_SOURCE_MODE:-stream}"
+      FISHEYE_EXTERNAL_CAMERA_STREAM_URL: "${FISHEYE_EXTERNAL_CAMERA_STREAM_URL:-}"
+      FISHEYE_EXTERNAL_CAMERA_LIVE_INTERVAL: "${FISHEYE_EXTERNAL_CAMERA_LIVE_INTERVAL:-1.0}"
+      FISHEYE_MODEL_PATH: "${FISHEYE_MODEL_PATH:-}"
+    volumes:
+      - fisheye-results:/app/static/results
+      - fisheye-uploads:/app/static/uploads
+      - fisheye-data:/app/data
+      - fisheye-models:/app/models
+      # Mount GCP service account key if needed
+      - "${GCP_SA_KEY_PATH:-/dev/null}:/app/gcp-sa-key.json:ro"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  fisheye-results:
+  fisheye-uploads:
+  fisheye-data:
+  fisheye-models:
+  cloud-sql-credentials:

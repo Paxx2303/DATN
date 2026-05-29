@@ -325,7 +325,7 @@ def build_settings(overrides: dict[str, Any] | None = None) -> AppSettings:
             ),
         ),
         preload_model=coerce_bool(overrides.get("preload_model"), parse_bool(os.getenv("FISHEYE_PRELOAD_MODEL", "1"))),
-        fallback_model_name=str(overrides.get("fallback_model_name") or os.getenv("FISHEYE_FALLBACK_MODEL", "yolo11n.pt")),
+        fallback_model_name=str(overrides.get("fallback_model_name") or os.getenv("FISHEYE_FALLBACK_MODEL", "traffic.pt")),
         model_path_override=overrides.get("model_path_override") or os.getenv("FISHEYE_MODEL_PATH"),
         filter_fallback_to_supported_classes=coerce_bool(
             overrides.get("filter_fallback_to_supported_classes"),
@@ -2919,6 +2919,19 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
                         raise
                     finally:
                         _temp_input.unlink(missing_ok=True)
+
+                if app.testing:
+                    _res = _video_job(
+                        temp_input,
+                        original_filename,
+                        preprocessing,
+                        conf_threshold,
+                        iou_threshold,
+                        model_key,
+                        target_video_fps,
+                    )
+                    temp_input = None
+                    return jsonify(_res), 200
 
                 _queue: VideoJobQueue = app.extensions["fisheye_job_queue"]
                 job_id = _queue.submit(
