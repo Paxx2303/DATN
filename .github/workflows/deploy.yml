@@ -1,0 +1,54 @@
+name: Deploy to GCP (WIF Mode)
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/506043894973/locations/global/workloadIdentityPools/gh-pool/providers/gh-provider'
+          service_account: 'github-deployer@project-ef8a8694-e33d-4954-ad1.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Package and Upload
+        run: |
+          # Chú ý: Vì code của bạn nằm trong thư mục fisheye_demo, 
+          # chúng ta sẽ đóng gói nội dung bên trong đó.
+          cd fisheye_demo
+          tar --exclude='.git' \
+              --exclude='venv' \
+              --exclude='__pycache__' \
+              --exclude='static/results/*' \
+              --exclude='static/uploads/*' \
+              -czf ../fisheye_deploy.tar.gz .
+          cd ..
+
+          gcloud compute instances start fisheye-gpu-instance --zone=asia-southeast1-b
+
+          gcloud compute scp fisheye_deploy.tar.gz fisheye-gpu-instance:~/ --zone=asia-southeast1-b --project=project-ef8a8694-e33d-4954-ad1
+
+          
+      - name: Remote Deploy Execution
+        run: |
+          gcloud compute ssh fisheye-gpu-instance --zone=asia-southeast1-b --command "
+            mkdir -p ~/fisheye_app
+            tar -xzf ~/fisheye_deploy.tar.gz -C ~/fisheye_app
+            rm ~/fisheye_deploy.tar.gz
+            cd ~/fisheye_app
+            sudo docker compose -f deploy/docker-compose.prod.yml up --build -d
+          "
