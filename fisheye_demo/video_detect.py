@@ -1,338 +1,255 @@
-from __future__ import annotations
+"""
+video_detect.py — Video Processing Pipeline
 
-import math
-import time
-from pathlib import Path
-from typing import Any
+Chạy trong worker thread (không phải Flask main thread).
+Hỗ trợ:
+- Fisheye transform mỗi frame (trước YOLO)
+- YOLO tracking với detection stride
+- Speed estimation
+- Congestion/incident detection
+- Progress callback cho job queue
+"""
 
 import cv2
 import numpy as np
-from PIL import Image
+import logging
+import time
+from pathlib import Path
+from typing import Any, Callable, Optional
+from fisheye import apply_fisheye_to_cv2
+from speed_estimator import SpeedEstimator
+from congestion_detector import CongestionDetector
+from incident_detector import IncidentDetector
 
-try:
-    from fisheye_demo.fisheye import apply_fisheye
-except ModuleNotFoundError:
-    from fisheye import apply_fisheye
-
-try:
-    from fisheye_demo.speed_estimator import SpeedEstimator, annotate_speed_on_frame
-    from fisheye_demo.congestion_detector import CongestionDetector, annotate_congestion_on_frame
-    _TRAFFIC_FEATURES_AVAILABLE = True
-except ImportError:
-    try:
-        from speed_estimator import SpeedEstimator, annotate_speed_on_frame
-        from congestion_detector import CongestionDetector, annotate_congestion_on_frame
-        _TRAFFIC_FEATURES_AVAILABLE = True
-    except ImportError:
-        _TRAFFIC_FEATURES_AVAILABLE = False
+logger = logging.getLogger(__name__)
 
 
-_BOX_COLORS_BGR: list[tuple[int, int, int]] = [
-    (40, 190, 255),
-    (80, 175, 76),
-    (180, 105, 255),
-    (42, 210, 215),
-    (34, 139, 230),
-    (227, 180, 70),
-]
-
-
-def detection_stride(source_fps: float, target_detect_fps: float | None) -> int:
-    """How many source frames between YOLO runs. 1 = every frame after fisheye."""
-    if target_detect_fps is None or target_detect_fps <= 0:
+def detection_stride(fps_source: float, target_fps: float) -> int:
+    """
+    Tính bước nhảy frame để đạt target_fps.
+    
+    Ví dụ: fps_source=30, target_fps=5 → stride=6
+    (cứ 6 frame mới chạy YOLO 1 lần)
+    
+    Luôn >= 1 để không bỏ sót frame nào.
+    """
+    if target_fps is None or target_fps <= 0:
         return 1
-    if source_fps <= 0:
-        return 1
-    if target_detect_fps >= source_fps:
-        return 1
-    return max(1, int(round(source_fps / target_detect_fps)))
-
-
-def _annotate_bgr_from_result(
-    frame_bgr: np.ndarray,
-    result: Any,
-    *,
-    names: dict[Any, str],
-    normalized_name_map: dict[str, str],
-    allowed_classes: set[str] | None,
-    filter_allowed_classes: bool,
-) -> np.ndarray:
-    """Draw last inference boxes on the current fisheye frame (same resolution)."""
-    out = frame_bgr.copy()
-    boxes = getattr(result, "boxes", None)
-    if boxes is None or len(boxes) == 0:
-        return out
-
-    xyxy = boxes.xyxy.cpu().numpy()
-    cls_ids = boxes.cls.cpu().numpy().astype(int)
-    confs = boxes.conf.cpu().numpy()
-
-    for i in range(len(xyxy)):
-        x1, y1, x2, y2 = (int(v) for v in xyxy[i])
-        cls_id = int(cls_ids[i])
-        conf = float(confs[i])
-        raw_name = str(names.get(cls_id, cls_id))
-        label = normalized_name_map.get(raw_name.lower(), raw_name)
-        if filter_allowed_classes and allowed_classes and label not in allowed_classes:
-            continue
-        color = _BOX_COLORS_BGR[cls_id % len(_BOX_COLORS_BGR)]
-        cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
-        txt = f"{label} {conf * 100:.0f}%"
-        cv2.putText(
-            out,
-            txt,
-            (x1, max(18, y1 - 4)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.45,
-            color,
-            1,
-            cv2.LINE_AA,
-        )
-    return out
+    stride = max(1, round(fps_source / target_fps))
+    return stride
 
 
 def run_video_detect(
     input_path: str,
     output_path: str,
-    model,
-    conf: float = 0.25,
+    model: Any,                          # ultralytics YOLO instance
+    conf: float = 0.35,
     iou: float = 0.45,
     device: str = "cpu",
     apply_fisheye_transform: bool = False,
-    fisheye_strength: float = 0.70,
+    fisheye_strength: float = 0.6,
     fisheye_radius: float = 0.85,
     fisheye_effect: str = "standard",
-    preview_path: str | None = None,
-    name_map: dict[str, str] | None = None,
-    allowed_classes: set[str] | None = None,
+    fisheye_center_x: float = 0.5,
+    fisheye_center_y: float = 0.5,
+    preview_path: Optional[str] = None,
+    name_map: Optional[dict[str, str]] = None,
+    allowed_classes: Optional[set[str]] = None,
     filter_allowed_classes: bool = False,
-    target_detect_fps: float | None = None,
-    # ── Traffic features ──────────────────────────────────────────────────────
-    enable_speed_estimation: bool = False,
-    speed_pixels_per_meter: float = 8.0,
-    speed_limit_kmh: float = 60.0,
-    enable_congestion_detection: bool = False,
-    congestion_capacity: int = 15,
-    # ── Incident detection ────────────────────────────────────────────────────
-    incident_detector: Any | None = None,
-    incident_camera_id: str = "video_upload",
+    target_detect_fps: Optional[float] = 5.0,
+    incident_detector_inst: Optional[IncidentDetector] = None,
+    incident_camera_id: str = "video",
+    progress_cb: Optional[Callable[[float], None]] = None,
 ) -> dict[str, Any]:
+    """
+    Xử lý toàn bộ video và ghi ra video annotated.
+    
+    Returns
+    -------
+    dict chứa:
+        counts      : {vehicle_type: count}
+        avg_speed   : float (km/h)
+        incidents   : list of incident dicts
+        duration_s  : float (giây xử lý)
+        frame_count : int
+    """
+    name_map = name_map or {}
+    allowed_classes = allowed_classes or set()
+    
+    # ── Mở video nguồn ───────────────────────────────────────
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         raise ValueError(f"Cannot open video: {input_path}")
-
-    fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-
-    if width <= 0 or height <= 0:
-        cap.release()
-        raise ValueError("Uploaded video has invalid frame size.")
-
-    stride = detection_stride(fps, target_detect_fps)
-
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    writer = cv2.VideoWriter(
-        output_path,
-        cv2.VideoWriter_fourcc(*"mp4v"),
-        fps,
-        (width, height),
-    )
+    
+    fps_src = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    stride = detection_stride(fps_src, target_detect_fps)
+    logger.info(f"Video: {width}x{height} @ {fps_src:.1f}fps, {total_frames} frames, stride={stride}")
+    
+    # ── Khởi tạo VideoWriter ──────────────────────────────────
+    # Thử H264 trước, fallback sang mp4v
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(output_path, fourcc, fps_src, (width, height))
     if not writer.isOpened():
-        cap.release()
-        raise RuntimeError(f"Cannot create video writer at: {output_path}")
-
-    names = getattr(getattr(model, "model", None), "names", None) or getattr(model, "names", None) or {}
-    normalized_name_map = {str(key).lower(): value for key, value in (name_map or {}).items()}
-
-    frame_count = 0
-    inference_times: list[float] = []
-    class_counts: dict[str, int] = {}
-    first_annotated_frame: np.ndarray | None = None
-    last_result: Any | None = None
-    inference_runs = 0
-
-    # ── Traffic feature instances ─────────────────────────────────────────────
-    speed_est: SpeedEstimator | None = None
-    congestion_det: CongestionDetector | None = None
-
-    # ── Incident tracking ─────────────────────────────────────────────────────
-    all_incidents: list[dict[str, Any]] = []
-    incident_counts: dict[str, int] = {}
-
-    if _TRAFFIC_FEATURES_AVAILABLE:
-        if enable_speed_estimation:
-            speed_est = SpeedEstimator(
-                fps=fps,
-                pixels_per_meter=speed_pixels_per_meter,
-                fisheye_correction=True,
-                speed_limit_kmh=speed_limit_kmh,
-            )
-        if enable_congestion_detection:
-            congestion_det = CongestionDetector()
-            # Cập nhật capacity cho ROI mặc định
-            congestion_det.add_roi("full_frame", 0.0, 0.0, 1.0, 1.0, capacity=congestion_capacity)
-            congestion_det.add_roi("intersection", 0.25, 0.25, 0.75, 0.75, capacity=max(1, congestion_capacity // 2))
-
-    wall_t0 = time.perf_counter()
-    try:
-        while True:
-            ok, frame_bgr = cap.read()
-            if not ok:
-                break
-
-            inference_frame = frame_bgr
-            if apply_fisheye_transform:
-                frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-                fisheye_image = apply_fisheye(
-                    Image.fromarray(frame_rgb),
-                    strength=fisheye_strength,
-                    radius=fisheye_radius,
-                    effect=fisheye_effect,
-                ).convert("RGB")
-                inference_frame = cv2.cvtColor(np.array(fisheye_image), cv2.COLOR_RGB2BGR)
-
-            run_infer = (frame_count % stride == 0) or last_result is None
-            if run_infer:
-                start = time.perf_counter()
-                last_result = model.predict(
-                    source=inference_frame,
-                    conf=conf,
-                    iou=iou,
-                    verbose=False,
-                    device=device,
-                )[0]
-                inference_ms = (time.perf_counter() - start) * 1000
-                inference_times.append(inference_ms)
-                inference_runs += 1
-
-                annotated_frame = last_result.plot()
-                for box in list(last_result.boxes or []):
-                    class_id = int(box.cls[0])
-                    raw_name = str(names.get(class_id, class_id))
-                    normalized_name = normalized_name_map.get(raw_name.lower(), raw_name)
-                    if filter_allowed_classes and allowed_classes and normalized_name not in allowed_classes:
-                        continue
-                    class_counts[normalized_name] = class_counts.get(normalized_name, 0) + 1
-            else:
-                annotated_frame = _annotate_bgr_from_result(
-                    inference_frame,
-                    last_result,
-                    names=names,
-                    normalized_name_map=normalized_name_map,
-                    allowed_classes=allowed_classes,
-                    filter_allowed_classes=filter_allowed_classes,
-                )
-
-            # ── Traffic features overlay ──────────────────────────────────────
-            if last_result is not None and _TRAFFIC_FEATURES_AVAILABLE:
-                # Xây dựng detections list từ last_result
-                frame_dets: list[dict[str, Any]] = []
-                boxes_obj = getattr(last_result, "boxes", None)
-                if boxes_obj is not None and len(boxes_obj):
-                    xyxy_arr = boxes_obj.xyxy.cpu().numpy()
-                    cls_arr = boxes_obj.cls.cpu().numpy().astype(int)
-                    conf_arr = boxes_obj.conf.cpu().numpy()
-                    for i in range(len(xyxy_arr)):
-                        x1, y1, x2, y2 = (float(v) for v in xyxy_arr[i])
-                        raw_name = str(names.get(int(cls_arr[i]), int(cls_arr[i])))
-                        cls_name = normalized_name_map.get(raw_name.lower(), raw_name)
-                        frame_dets.append({
-                            "class": cls_name,
-                            "confidence": float(conf_arr[i]),
-                            "bbox": [x1, y1, x2, y2],
-                        })
-
-                # Speed estimation
-                if speed_est is not None:
-                    speed_results = speed_est.update(frame_dets, width, height)
-                    annotated_frame = annotate_speed_on_frame(
-                        annotated_frame, speed_results, width, height,
-                        speed_limit_kmh=speed_limit_kmh,
-                    )
-
-                # Congestion detection
-                if congestion_det is not None:
-                    cong_result = congestion_det.update(frame_dets, width, height)
-                    annotated_frame = annotate_congestion_on_frame(
-                        annotated_frame, cong_result, width, height,
-                    )
-
-                # Incident detection
-                if incident_detector is not None:
-                    try:
-                        frame_rgb_for_inc = cv2.cvtColor(inference_frame, cv2.COLOR_BGR2RGB)
-                        new_incidents = incident_detector.process_frame(
-                            frame_dets,
-                            frame_rgb_for_inc,
-                            incident_camera_id,
-                            width,
-                            height,
-                        )
-                        for inc in new_incidents:
-                            all_incidents.append(inc)
-                            inc_type = inc.get("type", "unknown")
-                            incident_counts[inc_type] = incident_counts.get(inc_type, 0) + 1
-                    except Exception:
-                        pass
-
-            if frame_count == 0:
-                first_annotated_frame = annotated_frame.copy()
-
-            writer.write(annotated_frame)
-            frame_count += 1
-    finally:
-        cap.release()
-        writer.release()
-
-    wall_elapsed = max(time.perf_counter() - wall_t0, 1e-9)
-
-    if frame_count == 0:
-        raise ValueError("Uploaded video does not contain readable frames.")
-
-    if preview_path is not None and first_annotated_frame is not None:
-        Path(preview_path).parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(preview_path, first_annotated_frame)
-
-    avg_ms = round(sum(inference_times) / len(inference_times), 2) if inference_times else 0.0
-    total_detections = sum(class_counts.values())
-    duration_seconds = round(frame_count / fps, 3) if fps > 0 else 0.0
-    processing_fps = round(frame_count / wall_elapsed, 2)
-    inference_fps = round(inference_runs / wall_elapsed, 2)
-    effective_detect_fps = round(fps / stride, 2) if stride > 0 else fps
-
-    summary: dict[str, Any] = {
-        "total_frames": frame_count,
-        "fps_original": round(fps, 2),
-        "resolution": f"{width}x{height}",
-        "inference_ms_avg": avg_ms,
-        "class_counts": class_counts,
-        "total_detections": total_detections,
-        "duration_seconds": duration_seconds,
-        "processing_fps": processing_fps,
-        "inference_fps": inference_fps,
-        "fisheye_before_detect": apply_fisheye_transform,
-        "detection_stride": stride,
-        "effective_detect_fps": effective_detect_fps,
+        raise RuntimeError(f"Cannot open VideoWriter at {output_path}")
+    
+    # ── Khởi tạo analytics modules ───────────────────────────
+    speed_estimator = SpeedEstimator(fps=fps_src, scale_factor=0.05)
+    congestion = CongestionDetector(frame_width=width, frame_height=height)
+    
+    # ── Tracking state ────────────────────────────────────────
+    counts: dict[str, int] = {}          # Đếm xe theo loại
+    last_boxes: dict[int, tuple] = {}    # track_id → (x1,y1,x2,y2)
+    last_labels: dict[int, str] = {}     # track_id → class_name
+    preview_saved = False
+    frame_idx = 0
+    t_start = time.time()
+    
+    # ── Màu sắc cho từng loại xe ─────────────────────────────
+    COLOR_MAP = {
+        "car":        (0, 255, 0),
+        "truck":      (255, 128, 0),
+        "bus":        (0, 128, 255),
+        "motorcycle": (255, 0, 255),
+        "person":     (255, 255, 0),
+        "bicycle":    (0, 255, 255),
     }
-    if target_detect_fps is not None and target_detect_fps > 0:
-        summary["target_detect_fps"] = round(target_detect_fps, 3)
-    else:
-        summary["target_detect_fps"] = None
-
-    # ── Traffic feature stats ─────────────────────────────────────────────────
-    if speed_est is not None:
-        summary["speed_stats"] = speed_est.get_stats()
-    if congestion_det is not None:
-        summary["congestion_stats"] = congestion_det.get_status()
-
-    # ── Incident stats ────────────────────────────────────────────────────────
-    if incident_detector is not None:
-        summary["incident_counts"] = incident_counts
-        summary["total_incidents"] = sum(incident_counts.values())
-        summary["incidents"] = [
-            {k: v for k, v in inc.items() if k not in ("frame_rgb",)}
-            for inc in all_incidents
-        ]
-
-    return summary
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # ── Fisheye transform ─────────────────────────────────
+        if apply_fisheye_transform:
+            frame = apply_fisheye_to_cv2(
+                frame, strength=fisheye_strength,
+                radius=fisheye_radius, effect=fisheye_effect,
+                center_x=fisheye_center_x, center_y=fisheye_center_y,
+            )
+        
+        # ── YOLO inference (mỗi stride frames) ───────────────
+        if frame_idx % stride == 0:
+            # model.track() trả về Results với .boxes.data tensor
+            results = model.track(
+                frame,
+                conf=conf, iou=iou,
+                device=device,
+                persist=True,      # Giữ track state giữa các frame
+                verbose=False,
+            )
+            
+            # Parse kết quả tracking
+            last_boxes.clear()
+            last_labels.clear()
+            
+            if results and results[0].boxes is not None:
+                boxes_data = results[0].boxes
+                for box in boxes_data:
+                    if box.id is None:
+                        continue
+                    track_id = int(box.id.item())
+                    cls_id   = int(box.cls.item())
+                    cls_name = model.names[cls_id]
+                    
+                    # Filter class nếu cần
+                    if filter_allowed_classes and cls_name not in allowed_classes:
+                        continue
+                    
+                    x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
+                    last_boxes[track_id]  = (x1, y1, x2, y2)
+                    last_labels[track_id] = name_map.get(cls_name, cls_name)
+                    
+                    # Đếm xe (chỉ đếm lần đầu xuất hiện track_id)
+                    display_name = name_map.get(cls_name, cls_name)
+                    counts[display_name] = counts.get(display_name, 0)
+                    
+                    # Cập nhật speed estimator
+                    cx = (x1 + x2) // 2
+                    cy = (y1 + y2) // 2
+                    speed_estimator.update(track_id, cx, cy, frame_idx, display_name)
+        
+        # ── Vẽ bounding boxes và labels ───────────────────────
+        for track_id, (x1, y1, x2, y2) in last_boxes.items():
+            label = last_labels.get(track_id, "vehicle")
+            cls_key = label.lower()
+            color = COLOR_MAP.get(cls_key, (255, 255, 255))
+            
+            # Lấy tốc độ hiện tại
+            speed = speed_estimator.get_speed(track_id)
+            speed_text = f"{speed:.0f}km/h" if speed > 0 else ""
+            
+            # Vẽ bounding box
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            
+            # Label text: "Car#5 42km/h"
+            text = f"{label}#{track_id}"
+            if speed_text:
+                text += f" {speed_text}"
+            
+            # Background cho text
+            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            cv2.rectangle(frame, (x1, y1 - th - 6), (x1 + tw + 4, y1), color, -1)
+            cv2.putText(frame, text, (x1 + 2, y1 - 4),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        
+        # ── Incident detection ────────────────────────────────
+        if incident_detector_inst and frame_idx % stride == 0:
+            incidents = incident_detector_inst.analyze(
+                boxes=last_boxes,
+                labels=last_labels,
+                frame_idx=frame_idx,
+                fps=fps_src,
+            )
+            for inc in incidents:
+                # Vẽ warning overlay
+                x1, y1, x2, y2 = inc.get("bbox", (0,0,0,0))
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
+                cv2.putText(frame, inc["incident_type"], (x1, y1 - 10),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        
+        # ── Overlay: vehicle count ────────────────────────────
+        total_count = len(last_boxes)
+        cv2.putText(frame, f"Vehicles: {total_count}", (10, 30),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)
+        
+        # ── Ghi frame ra video ────────────────────────────────
+        writer.write(frame)
+        
+        # ── Lưu preview frame (frame 10 hoặc 5% đầu) ─────────
+        if not preview_saved and (frame_idx == min(10, total_frames // 20)):
+            if preview_path:
+                cv2.imwrite(preview_path, frame)
+                preview_saved = True
+        
+        frame_idx += 1
+        
+        # ── Cập nhật progress ─────────────────────────────────
+        if progress_cb and total_frames > 0:
+            pct = (frame_idx / total_frames) * 95.0  # dành 5% cho finalize
+            progress_cb(pct)
+    
+    # ── Cleanup ───────────────────────────────────────────────
+    cap.release()
+    writer.release()
+    
+    # Đếm cuối: đếm unique track_ids theo loại
+    for label in last_labels.values():
+        counts[label] = counts.get(label, 0) + 1
+    
+    avg_speed = speed_estimator.get_average_speed()
+    duration = time.time() - t_start
+    
+    logger.info(f"Video processing done: {frame_idx} frames in {duration:.1f}s, counts={counts}")
+    
+    return {
+        "counts": counts,
+        "avg_speed": round(avg_speed, 1),
+        "incidents": incident_detector_inst.get_all_incidents() if incident_detector_inst else [],
+        "duration_s": round(duration, 2),
+        "frame_count": frame_idx,
+        "fps_processed": round(frame_idx / max(duration, 0.1), 1),
+    }

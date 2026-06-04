@@ -1,195 +1,161 @@
 """
-job_queue.py — Async background job queue for video processing.
+job_queue.py — Async Video Processing Queue
 
-Sử dụng ThreadPoolExecutor để xử lý video ở background thay vì block HTTP request.
-Job states: pending → running → done | failed
+THIẾT KẾ:
+- VideoJobQueue là singleton, khởi tạo một lần khi import.
+- _jobs: dict[str, JobRecord] — lưu trạng thái trong RAM (đủ cho demo).
+- ThreadPoolExecutor với max_workers = Config.JOB_MAX_WORKERS.
+- submit_job() trả về job_id ngay lập tức (non-blocking).
+- get_status() trả về dict với progress%, eta, error_message.
 """
-from __future__ import annotations
 
+import uuid
+import time
 import logging
 import threading
-import time
-import uuid
-from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timezone
-from typing import Any, Callable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from typing import Any, Callable, Optional
+from config import Config
 
-logger = logging.getLogger("fisheye_demo.job_queue")
-
-_JOB_RETENTION_SECONDS = 3600  # Giữ job result trong 1 giờ
+logger = logging.getLogger(__name__)
 
 
-class JobState:
-    PENDING = "pending"
-    RUNNING = "running"
-    DONE = "done"
-    FAILED = "failed"
+@dataclass
+class JobRecord:
+    job_id: str
+    status: str = "pending"        # pending | running | done | failed
+    progress: float = 0.0          # 0.0 – 100.0
+    result_id: Optional[str] = None
+    error_message: Optional[str] = None
+    submitted_at: float = field(default_factory=time.time)
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
+    params: dict = field(default_factory=dict)
+    
+    def to_dict(self) -> dict:
+        return {
+            "job_id": self.job_id,
+            "status": self.status,
+            "progress": round(self.progress, 1),
+            "result_id": self.result_id,
+            "error_message": self.error_message,
+            "submitted_at": self.submitted_at,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "elapsed": (
+                (self.finished_at or time.time()) - (self.started_at or self.submitted_at)
+            ),
+        }
 
 
 class VideoJobQueue:
-    """Thread-safe job queue cho video processing với giới hạn concurrency."""
+    """
+    Thread-safe job queue cho video processing.
+    """
 
-    def __init__(self, max_workers: int = 2, max_queue_size: int = 10) -> None:
-        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="video-job")
-        self._max_queue_size = max_queue_size
-        self._jobs: dict[str, dict[str, Any]] = {}
+    def __init__(self, max_workers: int = 2):
+        self._jobs: dict[str, JobRecord] = {}
         self._lock = threading.Lock()
-        self._futures: dict[str, Future] = {}  # type: ignore[type-arg]
+        self._executor = ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix="video_worker",
+        )
+        logger.info(f"VideoJobQueue initialized (max_workers={max_workers})")
 
-        # Cleanup thread để xóa job cũ
-        self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True, name="job-cleanup")
-        self._cleanup_thread.start()
-
-    # ── Public API ────────────────────────────────────────────────────────────
-
-    def submit(
-        self,
-        fn: Callable[..., Any],
-        *args: Any,
-        job_type: str = "video_detect",
-        meta: dict[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> str:
-        """Submit một job vào queue. Trả về job_id ngay lập tức."""
+    def submit_job(self, worker_fn: Callable, params: dict) -> str:
+        """
+        Submit một job mới.
+        
+        Parameters
+        ----------
+        worker_fn : Hàm xử lý video, signature: (job_id, params, progress_cb) -> str
+                    Phải nhận progress_callback để báo cáo tiến độ.
+        params    : Dict tham số cho worker (input_path, output_path, model_key, ...)
+        
+        Returns
+        -------
+        str : job_id (UUID4 string)
+        """
+        job_id = str(uuid.uuid4())
+        record = JobRecord(job_id=job_id, params=params)
+        
         with self._lock:
-            pending_count = sum(
-                1 for j in self._jobs.values()
-                if j["status"] in (JobState.PENDING, JobState.RUNNING)
-            )
-            if pending_count >= self._max_queue_size:
-                raise RuntimeError(
-                    f"Job queue full ({pending_count}/{self._max_queue_size} active jobs). "
-                    "Try again later."
-                )
-
-            job_id = uuid.uuid4().hex
-            self._jobs[job_id] = {
-                "job_id": job_id,
-                "job_type": job_type,
-                "status": JobState.PENDING,
-                "created_at": _utc_iso(),
-                "started_at": None,
-                "finished_at": None,
-                "result": None,
-                "error": None,
-                "meta": meta or {},
-            }
-
-        future = self._executor.submit(self._run_job, job_id, fn, args, kwargs)
-        with self._lock:
-            self._futures[job_id] = future
-
-        logger.info("Job submitted: job_id=%s type=%s", job_id, job_type)
+            self._jobs[job_id] = record
+        
+        # Submit vào thread pool — non-blocking
+        future = self._executor.submit(self._run_job, job_id, worker_fn, params)
+        # Log lỗi nếu future raise exception
+        future.add_done_callback(lambda f: self._on_future_done(job_id, f))
+        
+        logger.info(f"Job {job_id} submitted (pending)")
         return job_id
 
-    def get(self, job_id: str) -> dict[str, Any] | None:
-        """Lấy trạng thái và kết quả của job. Trả về None nếu không tồn tại."""
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
-                return None
-            return dict(job)
+    def _run_job(self, job_id: str, worker_fn: Callable, params: dict) -> None:
+        """Chạy trong worker thread. Cập nhật status → running → done/failed."""
+        record = self._jobs[job_id]
+        record.status = "running"
+        record.started_at = time.time()
+        logger.info(f"Job {job_id} started")
 
-    def list_recent(self, limit: int = 20) -> list[dict[str, Any]]:
-        """Danh sách các jobs gần nhất, không bao gồm result payload (để giảm payload)."""
-        with self._lock:
-            jobs = sorted(
-                self._jobs.values(),
-                key=lambda j: j["created_at"],
-                reverse=True,
-            )[:limit]
-        return [
-            {k: v for k, v in j.items() if k != "result"}
-            for j in jobs
-        ]
+        def progress_callback(pct: float) -> None:
+            """Worker gọi hàm này để báo tiến độ (0–100)."""
+            record.progress = min(pct, 99.0)  # 100.0 chỉ set khi done
 
-    def cancel(self, job_id: str) -> bool:
-        """Hủy job đang pending. Trả về True nếu cancel thành công."""
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None or job["status"] != JobState.PENDING:
-                return False
-            future = self._futures.get(job_id)
-            if future and future.cancel():
-                job["status"] = JobState.FAILED
-                job["error"] = "Cancelled by user"
-                job["finished_at"] = _utc_iso()
-                logger.info("Job cancelled: job_id=%s", job_id)
-                return True
-        return False
-
-    def stats(self) -> dict[str, int]:
-        with self._lock:
-            counts: dict[str, int] = {
-                JobState.PENDING: 0,
-                JobState.RUNNING: 0,
-                JobState.DONE: 0,
-                JobState.FAILED: 0,
-            }
-            for job in self._jobs.values():
-                counts[job["status"]] = counts.get(job["status"], 0) + 1
-        return counts
-
-    def shutdown(self, wait: bool = True) -> None:
-        self._executor.shutdown(wait=wait)
-
-    # ── Internal ──────────────────────────────────────────────────────────────
-
-    def _run_job(self, job_id: str, fn: Callable[..., Any], args: tuple, kwargs: dict) -> None:
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
-                return
-            job["status"] = JobState.RUNNING
-            job["started_at"] = _utc_iso()
-
-        logger.info("Job started: job_id=%s", job_id)
         try:
-            result = fn(*args, **kwargs)
-            with self._lock:
-                job = self._jobs[job_id]
-                job["status"] = JobState.DONE
-                job["result"] = result
-                job["finished_at"] = _utc_iso()
-            logger.info("Job done: job_id=%s", job_id)
+            result_id = worker_fn(job_id=job_id, params=params, progress_cb=progress_callback)
+            record.status = "done"
+            record.progress = 100.0
+            record.result_id = result_id
+            record.finished_at = time.time()
+            logger.info(f"Job {job_id} done → result_id={result_id}")
         except Exception as exc:
-            with self._lock:
-                job = self._jobs.get(job_id)
-                if job:
-                    job["status"] = JobState.FAILED
-                    job["error"] = str(exc)
-                    job["finished_at"] = _utc_iso()
-            logger.exception("Job failed: job_id=%s error=%s", job_id, exc)
+            record.status = "failed"
+            record.error_message = str(exc)
+            record.finished_at = time.time()
+            logger.error(f"Job {job_id} failed: {exc}", exc_info=True)
 
-    def _cleanup_loop(self) -> None:
-        while True:
-            time.sleep(300)  # Run every 5 minutes
-            try:
-                self._evict_old_jobs()
-            except Exception:
-                pass
+    def _on_future_done(self, job_id: str, future) -> None:
+        """Callback khi future hoàn thành (catch unhandled exceptions)."""
+        exc = future.exception()
+        if exc:
+            record = self._jobs.get(job_id)
+            if record and record.status != "failed":
+                record.status = "failed"
+                record.error_message = str(exc)
 
-    def _evict_old_jobs(self) -> None:
-        now = time.time()
+    def get_status(self, job_id: str) -> Optional[dict]:
+        """Trả về trạng thái job. None nếu không tìm thấy."""
+        record = self._jobs.get(job_id)
+        return record.to_dict() if record else None
+
+    def get_all_jobs(self) -> list[dict]:
+        """Trả về tất cả jobs, mới nhất trước."""
         with self._lock:
-            to_delete = []
-            for job_id, job in self._jobs.items():
-                if job["status"] not in (JobState.DONE, JobState.FAILED):
-                    continue
-                finished = job.get("finished_at")
-                if finished:
-                    try:
-                        finished_ts = datetime.fromisoformat(finished.replace("Z", "+00:00")).timestamp()
-                        if now - finished_ts > _JOB_RETENTION_SECONDS:
-                            to_delete.append(job_id)
-                    except Exception:
-                        pass
-            for job_id in to_delete:
-                del self._jobs[job_id]
-                self._futures.pop(job_id, None)
-        if to_delete:
-            logger.info("Evicted %d old jobs", len(to_delete))
+            jobs = list(self._jobs.values())
+        return sorted(
+            [j.to_dict() for j in jobs],
+            key=lambda x: x["submitted_at"],
+            reverse=True,
+        )
+
+    def cleanup_old_jobs(self, max_age_seconds: int = 3600) -> int:
+        """Xóa các job cũ hơn max_age_seconds khỏi RAM. Trả về số job đã xóa."""
+        cutoff = time.time() - max_age_seconds
+        with self._lock:
+            old_ids = [
+                jid for jid, rec in self._jobs.items()
+                if rec.finished_at and rec.finished_at < cutoff
+            ]
+            for jid in old_ids:
+                del self._jobs[jid]
+        return len(old_ids)
+
+    def shutdown(self) -> None:
+        """Graceful shutdown — đợi jobs đang chạy hoàn thành."""
+        logger.info("Shutting down VideoJobQueue...")
+        self._executor.shutdown(wait=True)
 
 
-def _utc_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+# Singleton instance
+video_job_queue = VideoJobQueue(max_workers=Config.JOB_MAX_WORKERS)

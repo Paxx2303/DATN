@@ -1,302 +1,89 @@
-from __future__ import annotations
+"""
+config.py — FishEye8K Configuration
+
+THIẾT KẾ:
+- Dùng class Config với class attributes để dễ import.
+- Tất cả path dùng os.path.abspath để tương thích đa hệ điều hành.
+- load_dotenv() gọi ngay khi import module.
+- Các tham số có giá trị mặc định hợp lý để chạy được không cần .env.
+"""
 
 import os
-import logging
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from dotenv import load_dotenv
 
-# --- Logger Setup ---
-logger = logging.getLogger("fisheye_demo.config")
+# Nạp .env file ngay lập tức
+load_dotenv()
 
-# --- Constants ---
-CLASS_NAMES = ["Car", "Bus", "Truck", "Pedestrian", "Motorbike"]
-CLASS_COLORS = {
-    "Car": "#4FC3F7",
-    "Bus": "#FFB74D",
-    "Truck": "#EF5350",
-    "Pedestrian": "#A5D6A7",
-    "Motorbike": "#CE93D8",
-}
-NAME_MAP = {
-    "car": "Car",
-    "bus": "Bus",
-    "truck": "Truck",
-    "person": "Pedestrian",
-    "pedestrian": "Pedestrian",
-    "motorcycle": "Motorbike",
-    "motorbike": "Motorbike",
-    "bicycle": "Motorbike",
-}
-ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
-ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
-ALLOWED_MEDIA_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_VIDEO_EXTENSIONS
-SUPPORTED_SOURCE_LAYOUTS = ("fisheye", "normal")
-TRAFFIC_CHECKPOINT_NAME = "traffic.pt"
-SUPPORTED_EXTERNAL_CAMERA_SOURCE_MODES = ("snapshot", "stream")
+# BASE_DIR = thư mục chứa config.py
+BASE_DIR = Path(__file__).parent.resolve()
 
-# --- Path Configurations ---
-APP_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = APP_DIR.parent
-STATIC_DIR = APP_DIR / "static"
-ENV_PATH = APP_DIR / ".env"
 
-@dataclass
-class AppSettings:
-    upload_dir: Path
-    results_dir: Path
-    recent_image_db_path: Path
-    max_upload_mb: int
-    default_conf: float
-    default_iou: float
-    history_limit: int
-    recent_image_limit: int
-    preload_model: bool
-    fallback_model_name: str
-    model_path_override: str | None
-    filter_fallback_to_supported_classes: bool
-    device: str
-    max_video_seconds: int
-    default_fisheye_strength: float
-    default_fisheye_radius: float
-    default_fisheye_effect: str
-    camera_fisheye_strength: float
-    camera_fisheye_radius: float
-    camera_fisheye_effect: str
-    camera_fisheye_center_x: float
-    camera_fisheye_center_y: float
-    camera_fisheye_axis_scale_x: float
-    camera_fisheye_axis_scale_y: float
-    camera_fisheye_full_frame: bool
-    external_camera_source_mode: str
-    external_camera_url: str
-    external_camera_stream_url: str
-    external_camera_limit: int
-    external_camera_live_interval_seconds: float
+class Config:
+    # ── Paths ────────────────────────────────────────────────
+    UPLOAD_FOLDER     = BASE_DIR / "static" / "uploads"
+    RESULTS_FOLDER    = BASE_DIR / "static" / "results"
+    MODEL_FOLDER      = BASE_DIR                 # Tìm trực tiếp ở thư mục gốc (BASE_DIR) vì checkpoints nằm ở đó
+    DB_PATH           = BASE_DIR / "fisheye.db" # SQLite fallback
 
-def load_env_file(env_path: Path) -> None:
-    if not env_path.exists():
-        return
+    # ── Flask ────────────────────────────────────────────────
+    SECRET_KEY        = os.getenv("SECRET_KEY", "fisheye8k-dev-secret")
+    DEBUG             = os.getenv("FLASK_DEBUG", "0") == "1"
+    MAX_CONTENT_LENGTH = 500 * 1024 * 1024   # 500 MB upload limit
 
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
+    # ── Database ─────────────────────────────────────────────
+    DATABASE_URL      = os.getenv("DATABASE_URL", "")  # postgresql://...
 
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
-            os.environ[key] = value
+    # ── YOLO Model ───────────────────────────────────────────
+    DEFAULT_MODEL_KEY = os.getenv("DEFAULT_MODEL", "small")
+    AVAILABLE_MODELS  = {
+        "best":  str(MODEL_FOLDER / "yolo11_fisheye_v5_best.pt"),
+        "nano":  str(MODEL_FOLDER / "yolo11n.pt"),
+        "small": str(MODEL_FOLDER / "traffic.pt"),
+    }
+    DEFAULT_CONF      = float(os.getenv("YOLO_CONF", "0.35"))
+    DEFAULT_IOU       = float(os.getenv("YOLO_IOU", "0.45"))
+    DEFAULT_DEVICE    = os.getenv("COMPUTE_DEVICE", "cpu")  # "cpu" | "cuda:0" | "mps"
 
-def get_compute_device() -> str:
-    try:
-        import torch
-        if torch.cuda.is_available():
-            return "0"
-    except Exception:
-        pass
-    return "cpu"
+    # ── Fisheye Defaults ─────────────────────────────────────
+    FISHEYE_STRENGTH  = float(os.getenv("FISHEYE_STRENGTH", "0.6"))
+    FISHEYE_RADIUS    = float(os.getenv("FISHEYE_RADIUS", "0.85"))
+    FISHEYE_EFFECT    = os.getenv("FISHEYE_EFFECT", "standard")  # standard|extreme|subtle
 
-def parse_bool(value: str | None) -> bool:
-    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+    # ── Job Queue ────────────────────────────────────────────
+    JOB_MAX_WORKERS   = int(os.getenv("JOB_WORKERS", "2"))
+    TARGET_DETECT_FPS = float(os.getenv("TARGET_DETECT_FPS", "5.0"))  # fps để sample frames
 
-def coerce_bool(value: Any, default: bool) -> bool:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    return parse_bool(str(value))
+    # ── External Camera Polling ──────────────────────────────
+    EXT_CAM_SOURCE_URL = os.getenv("EXT_CAM_SOURCE_URL", "https://camera.0511.vn/camera.html")
+    EXT_CAM_INTERVAL   = float(os.getenv("EXT_CAM_INTERVAL", "10.0"))  # seconds
+    EXT_CAM_LIMIT      = int(os.getenv("EXT_CAM_LIMIT", "6"))
+    EXT_CAM_LIMIT_GPU  = int(os.getenv("EXT_CAM_LIMIT_GPU", "4"))   # cameras in parallel (GPU)
+    EXT_CAM_LIMIT_CPU  = int(os.getenv("EXT_CAM_LIMIT_CPU", "1"))   # cameras sequential (CPU)
 
-def clamp_float(value: Any, minimum: float, maximum: float, default: float) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    return max(minimum, min(maximum, number))
+    # ── Speed Estimation ─────────────────────────────────────
+    # px→m scale: 1px ≈ SPEED_SCALE_FACTOR metres (calibrate per camera)
+    SPEED_SCALE_FACTOR = float(os.getenv("SPEED_SCALE_FACTOR", "0.05"))
 
-def normalize_source_layout(value: Any) -> str:
-    layout = str(value or "fisheye").strip().lower()
-    return layout if layout in SUPPORTED_SOURCE_LAYOUTS else "fisheye"
+    # ── Alert Thresholds ─────────────────────────────────────
+    ALERT_HIGH_DENSITY = int(os.getenv("ALERT_HIGH_DENSITY", "20"))  # xe/frame
 
-def normalize_external_camera_source_mode(value: Any, source_ref: str | None = None) -> str:
-    mode = str(value or "").strip().lower()
-    if mode in SUPPORTED_EXTERNAL_CAMERA_SOURCE_MODES:
-        return mode
+    # ── Google Cloud Storage (optional) ─────────────────────
+    GCS_BUCKET        = os.getenv("GCS_BUCKET", "")
+    GCS_CREDENTIALS   = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
 
-    source_text = str(source_ref or "").strip().lower()
-    if source_text.startswith(("rtsp://", "rtmp://", "udp://", "tcp://", "file://")):
-        return "stream"
-    if any(token in source_text for token in (".m3u8", ".mpd", ".mjpeg", ".mjpg")):
-        return "stream"
-    return "snapshot"
+    # ── Recent Image Buffer ──────────────────────────────────
+    RECENT_IMAGE_LIMIT = 100
 
-def build_settings(overrides: dict[str, Any] | None = None) -> AppSettings:
-    # Make sure env is loaded
-    load_env_file(ENV_PATH)
-    
-    overrides = overrides or {}
-
-    upload_dir = Path(
-        overrides.get("upload_dir")
-        or os.getenv("FISHEYE_UPLOAD_DIR")
-        or STATIC_DIR / "uploads"
-    )
-    results_dir = Path(
-        overrides.get("results_dir")
-        or os.getenv("FISHEYE_RESULTS_DIR")
-        or os.getenv("ARTIFACT_DIR")
-        or STATIC_DIR / "results"
-    )
-    recent_image_db_path = Path(
-        overrides.get("recent_image_db_path")
-        or os.getenv("FISHEYE_RECENT_IMAGE_DB")
-        or APP_DIR / "recent_images.sqlite3"
-    )
-    
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    results_dir.mkdir(parents=True, exist_ok=True)
-    recent_image_db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Late import to prevent circular dependency
-    try:
-        from fisheye import EFFECT_MAP
-    except ModuleNotFoundError:
-        from fisheye_demo.fisheye import EFFECT_MAP
-
-    default_fisheye_effect = str(
-        overrides.get("default_fisheye_effect")
-        or os.getenv("FISHEYE_DEFAULT_EFFECT")
-        or os.getenv("FISHEYE_EFFECT")
-        or "standard"
-    )
-    if default_fisheye_effect not in EFFECT_MAP:
-        default_fisheye_effect = "standard"
-
-    camera_fisheye_effect = str(
-        overrides.get("camera_fisheye_effect")
-        or os.getenv("FISHEYE_CAMERA_EFFECT")
-        or "traffic_camera"
-    )
-    if camera_fisheye_effect not in EFFECT_MAP:
-        camera_fisheye_effect = "traffic_camera"
-
-    external_camera_url = str(
-        overrides.get("external_camera_url")
-        or os.getenv("FISHEYE_EXTERNAL_CAMERA_URL")
-        or "https://camera.0511.vn/camera.html"
-    )
-    external_camera_stream_url = str(
-        overrides.get("external_camera_stream_url")
-        or os.getenv("FISHEYE_EXTERNAL_CAMERA_STREAM_URL")
-        or ""
-    ).strip()
-    
-    external_camera_source_mode = normalize_external_camera_source_mode(
-        overrides.get("external_camera_source_mode")
-        or os.getenv("FISHEYE_EXTERNAL_CAMERA_SOURCE_MODE"),
-        external_camera_stream_url or external_camera_url,
-    )
-    if external_camera_source_mode == "stream" and not external_camera_stream_url:
-        external_camera_stream_url = external_camera_url
-
-    return AppSettings(
-        upload_dir=upload_dir,
-        results_dir=results_dir,
-        recent_image_db_path=recent_image_db_path,
-        max_upload_mb=int(overrides.get("max_upload_mb") or os.getenv("FISHEYE_MAX_UPLOAD_MB", "32")),
-        default_conf=float(
-            overrides.get("default_conf")
-            or os.getenv("FISHEYE_DEFAULT_CONF")
-            or os.getenv("CONFIDENCE_THRESHOLD")
-            or "0.25"
-        ),
-        default_iou=float(
-            overrides.get("default_iou")
-            or os.getenv("FISHEYE_DEFAULT_IOU")
-            or os.getenv("IOU_THRESHOLD")
-            or "0.45"
-        ),
-        history_limit=int(overrides.get("history_limit") or os.getenv("FISHEYE_HISTORY_LIMIT", "12")),
-        recent_image_limit=max(
-            1,
-            min(
-                1000,
-                int(overrides.get("recent_image_limit") or os.getenv("FISHEYE_RECENT_IMAGE_LIMIT", "100")),
-            ),
-        ),
-        preload_model=coerce_bool(overrides.get("preload_model"), parse_bool(os.getenv("FISHEYE_PRELOAD_MODEL", "1"))),
-        fallback_model_name=str(overrides.get("fallback_model_name") or os.getenv("FISHEYE_FALLBACK_MODEL", "traffic.pt")),
-        model_path_override=overrides.get("model_path_override") or os.getenv("FISHEYE_MODEL_PATH"),
-        filter_fallback_to_supported_classes=coerce_bool(
-            overrides.get("filter_fallback_to_supported_classes"),
-            parse_bool(os.getenv("FISHEYE_FILTER_FALLBACK_CLASSES", "1")),
-        ),
-        device=str(overrides.get("device") or os.getenv("FISHEYE_DEVICE") or os.getenv("DEVICE") or get_compute_device()),
-        max_video_seconds=int(overrides.get("max_video_seconds") or os.getenv("FISHEYE_MAX_VIDEO_SECONDS", "60")),
-        default_fisheye_strength=clamp_float(
-            overrides.get("default_fisheye_strength") or os.getenv("FISHEYE_DEFAULT_STRENGTH") or os.getenv("FISHEYE_STRENGTH"),
-            0.0,
-            1.0,
-            0.7,
-        ),
-        default_fisheye_radius=clamp_float(
-            overrides.get("default_fisheye_radius") or os.getenv("FISHEYE_DEFAULT_RADIUS") or os.getenv("FISHEYE_RADIUS"),
-            0.0,
-            1.0,
-            0.85,
-        ),
-        default_fisheye_effect=default_fisheye_effect,
-        camera_fisheye_strength=clamp_float(
-            overrides.get("camera_fisheye_strength") or os.getenv("FISHEYE_CAMERA_STRENGTH"),
-            0.0,
-            1.0,
-            0.82,
-        ),
-        camera_fisheye_radius=clamp_float(
-            overrides.get("camera_fisheye_radius") or os.getenv("FISHEYE_CAMERA_RADIUS"),
-            0.0,
-            1.0,
-            1.0,
-        ),
-        camera_fisheye_effect=camera_fisheye_effect,
-        camera_fisheye_center_x=clamp_float(
-            overrides.get("camera_fisheye_center_x") or os.getenv("FISHEYE_CAMERA_CENTER_X"),
-            0.0,
-            1.0,
-            0.5,
-        ),
-        camera_fisheye_center_y=clamp_float(
-            overrides.get("camera_fisheye_center_y") or os.getenv("FISHEYE_CAMERA_CENTER_Y"),
-            0.0,
-            1.0,
-            0.6,
-        ),
-        camera_fisheye_axis_scale_x=clamp_float(
-            overrides.get("camera_fisheye_axis_scale_x") or os.getenv("FISHEYE_CAMERA_AXIS_SCALE_X"),
-            0.35,
-            2.5,
-            1.18,
-        ),
-        camera_fisheye_axis_scale_y=clamp_float(
-            overrides.get("camera_fisheye_axis_scale_y") or os.getenv("FISHEYE_CAMERA_AXIS_SCALE_Y"),
-            0.35,
-            2.5,
-            0.82,
-        ),
-        camera_fisheye_full_frame=coerce_bool(
-            overrides.get("camera_fisheye_full_frame"),
-            parse_bool(os.getenv("FISHEYE_CAMERA_FULL_FRAME", "1")),
-        ),
-        external_camera_source_mode=external_camera_source_mode,
-        external_camera_url=external_camera_url,
-        external_camera_stream_url=external_camera_stream_url,
-        external_camera_limit=int(overrides.get("external_camera_limit") or os.getenv("FISHEYE_EXTERNAL_CAMERA_LIMIT", "1")),
-        external_camera_live_interval_seconds=clamp_float(
-            overrides.get("external_camera_live_interval_seconds")
-            or os.getenv("FISHEYE_EXTERNAL_CAMERA_LIVE_INTERVAL", "1.0"),
-            0.1,
-            120.0,
-            1.0,
-        ),
-    )
+    # ── Vehicle Name Mapping ─────────────────────────────────
+    # Map COCO class names → tiếng Việt / custom labels
+    VEHICLE_NAME_MAP  = {
+        "car":        "Car",
+        "truck":      "Truck",
+        "bus":        "Bus",
+        "motorcycle": "Motorbike",
+        "person":     "Pedestrian",
+        "bicycle":    "Bicycle",
+    }
+    # Add values to the set so Title case model names are also accepted
+    VEHICLE_CLASSES   = set(VEHICLE_NAME_MAP.keys()).union(set(VEHICLE_NAME_MAP.values()))

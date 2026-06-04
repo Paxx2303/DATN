@@ -1,0 +1,27 @@
+{
+  "result_id": "aa26b68bfb41409f88a79b886366f567",
+  "filename": "congestion_example.jpg",
+  "summary": {
+    "counts": {},
+    "total": 0,
+    "avg_speed": 0.0,
+    "duration_s": 0.677,
+    "model_key": "best",
+    "original_size": [
+      640,
+      480
+    ]
+  },
+  "artifacts": {
+    "annotated": "annotated.jpg"
+  },
+  "preprocessing": {
+    "enabled": false,
+    "strength": 0.6,
+    "radius": 0.85,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5
+  },
+  "detections": []
+}

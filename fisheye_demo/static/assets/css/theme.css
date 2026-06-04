@@ -1,0 +1,27 @@
+:root {
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Core Theme Colors (Curated HSL tailored colors, sleek dark mode) */
+  --bg: #050a0f;
+  --color-background-tertiary: #050a0f;
+  --color-background-primary: rgba(13, 22, 33, 0.88);
+  --color-background-secondary: rgba(255, 255, 255, 0.04);
+  --color-border-tertiary: rgba(255, 255, 255, 0.08);
+  --color-border-secondary: rgba(255, 255, 255, 0.16);
+
+  --color-text-primary: #edf5fb;
+  --color-text-secondary: #93aab9;
+  --color-text-tertiary: rgba(147, 170, 185, 0.6);
+
+  --color-text-info: #55d6ff;
+  --color-text-success: #8ad48a;
+  --color-text-warning: #ffd166;
+  --color-text-danger: #ff6b6b;
+
+  --border-radius-lg: 16px;
+  --border-radius-md: 10px;
+  --border-radius-sm: 6px;
+
+  --shadow: 0 20px 80px rgba(0, 0, 0, 0.45);
+}

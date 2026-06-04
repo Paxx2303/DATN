@@ -1,9 +1,5 @@
-from __future__ import annotations
+from app import create_app
 
-try:
-    from fisheye_demo.app import app
-except ModuleNotFoundError:
-    from app import app
-
+app = create_app()
 
 __all__ = ["app"]

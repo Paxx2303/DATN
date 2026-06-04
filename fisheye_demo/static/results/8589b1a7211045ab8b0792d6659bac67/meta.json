@@ -1,0 +1,27 @@
+{
+  "result_id": "8589b1a7211045ab8b0792d6659bac67",
+  "filename": "test.jpg",
+  "summary": {
+    "counts": {},
+    "total": 0,
+    "avg_speed": 0.0,
+    "duration_s": 0.791,
+    "model_key": "best",
+    "original_size": [
+      1280,
+      720
+    ]
+  },
+  "artifacts": {
+    "annotated": "annotated.jpg"
+  },
+  "preprocessing": {
+    "enabled": false,
+    "strength": 0.6,
+    "radius": 0.85,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5
+  },
+  "detections": []
+}

@@ -1,102 +1,155 @@
-from __future__ import annotations
+"""
+utils/helpers.py — Shared Utility Functions
 
-import io
+Các hàm tiện ích nhỏ dùng trong routes và services.
+"""
+
+import uuid
 import base64
-from datetime import datetime, timezone
-from typing import Any
+import io
+import logging
+from pathlib import Path
+from typing import Optional, BinaryIO
+import numpy as np
 from PIL import Image
+from config import Config
 
-try:
-    from config import NAME_MAP
-except ImportError:
-    from fisheye_demo.config import NAME_MAP
+logger = logging.getLogger(__name__)
 
 
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+def generate_result_id() -> str:
+    """Tạo ID duy nhất cho một kết quả nhận diện."""
+    return uuid.uuid4().hex   # 32-char hex string
 
 
-def utc_now_iso_ms() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-
-def utc_now_iso_from_timestamp(timestamp: float) -> str:
-    return datetime.fromtimestamp(timestamp, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-
-
-def pil_to_b64(image: Image.Image, fmt: str = "JPEG", quality: int = 92) -> str:
-    buffer = io.BytesIO()
-    _fmt = fmt.upper()
-    save_kwargs: dict[str, Any] = {"format": _fmt}
-    if _fmt in {"JPEG", "WEBP"}:
-        save_kwargs["quality"] = quality
-    image.save(buffer, **save_kwargs)
-    mime = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp", "BMP": "image/bmp"}.get(_fmt, "image/jpeg")
-    return f"data:{mime};base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-
-def pil_to_jpeg_bytes(image: Image.Image, quality: int = 90) -> bytes:
-    buffer = io.BytesIO()
-    image.save(buffer, format="JPEG", quality=quality)
-    return buffer.getvalue()
-
-
-def build_placeholder_jpeg(message: str, size: tuple[int, int] = (960, 540)) -> bytes:
-    image = Image.new("RGB", size, "#08131c")
+def read_uploaded_image(file_storage) -> Optional[Image.Image]:
+    """
+    Đọc ảnh từ Flask FileStorage object.
+    
+    Parameters
+    ----------
+    file_storage : werkzeug.datastructures.FileStorage
+    
+    Returns
+    -------
+    PIL Image (RGB) hoặc None nếu lỗi
+    """
     try:
-        from PIL import ImageDraw
-
-        draw = ImageDraw.Draw(image)
-        draw.text((24, size[1] // 2 - 10), message[:100], fill="#edf5fb")
-    except Exception:
-        pass
-    return pil_to_jpeg_bytes(image, quality=85)
+        img = Image.open(file_storage.stream).convert("RGB")
+        return img
+    except Exception as e:
+        logger.error(f"Cannot read uploaded image: {e}")
+        return None
 
 
-def build_mjpeg_part(frame_bytes: bytes) -> bytes:
-    return (
-        b"--frame\r\n"
-        b"Content-Type: image/jpeg\r\n"
-        + f"Content-Length: {len(frame_bytes)}\r\n".encode("ascii")
-        + b"Cache-Control: no-cache\r\n\r\n"
-        + frame_bytes
-        + b"\r\n"
-    )
-
-
-def secure_filename(filename: str) -> str:
-    cleaned = "".join(ch if ch.isalnum() or ch in {".", "-", "_"} else "_" for ch in filename)
-    return cleaned.strip("._") or "upload.bin"
-
-
-def normalize_class_name(raw_name: str) -> str:
-    return NAME_MAP.get(raw_name.strip().lower(), raw_name.strip())
-
-
-def to_hex_bgr(color_hex: str) -> tuple[int, int, int]:
-    red = int(color_hex[1:3], 16)
-    green = int(color_hex[3:5], 16)
-    blue = int(color_hex[5:7], 16)
-    return blue, green, red
-
-
-def apply_preprocessing(image: Image.Image, preprocessing: dict[str, Any]) -> Image.Image:
-    try:
-        from fisheye import apply_fisheye
-    except ImportError:
-        from fisheye_demo.fisheye import apply_fisheye
-
-    if not preprocessing["enabled"]:
-        return image.copy()
+def apply_preprocessing(
+    image: Image.Image,
+    enabled: bool = False,
+    strength: float = 0.6,
+    radius: float = 0.85,
+    effect: str = "standard",
+    center_x: float = 0.5,
+    center_y: float = 0.5,
+) -> Image.Image:
+    """
+    Apply fisheye preprocessing nếu enabled.
+    Wrapper để routes không import trực tiếp fisheye.py.
+    """
+    if not enabled:
+        return image
+    
+    from fisheye import apply_fisheye
     return apply_fisheye(
         image,
-        strength=preprocessing["strength"],
-        radius=preprocessing["radius"],
-        effect=preprocessing["effect"],
-        center_x_ratio=preprocessing.get("center_x_ratio", 0.5),
-        center_y_ratio=preprocessing.get("center_y_ratio", 0.5),
-        axis_scale_x=preprocessing.get("axis_scale_x", 1.0),
-        axis_scale_y=preprocessing.get("axis_scale_y", 1.0),
-        full_frame=preprocessing.get("full_frame", False),
+        strength=strength,
+        radius=radius,
+        effect=effect,
+        center_x=center_x,
+        center_y=center_y,
     )
 
+
+def pil_to_base64(image: Image.Image, format: str = "JPEG", quality: int = 85) -> str:
+    """Encode PIL Image thành base64 string cho JSON response."""
+    buf = io.BytesIO()
+    if format == "JPEG" and image.mode in ("RGBA", "P"):
+        image = image.convert("RGB")
+    image.save(buf, format=format, quality=quality)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def draw_detections_on_image(
+    image: Image.Image,
+    detections: list[dict],
+    name_map: Optional[dict] = None,
+) -> Image.Image:
+    """
+    Vẽ bounding boxes và labels lên ảnh PIL.
+    Dùng cho image inference (không phải video).
+    
+    Returns ảnh PIL mới đã annotated.
+    """
+    import cv2
+    
+    name_map = name_map or {}
+    
+    # PIL → OpenCV BGR
+    img_array = np.array(image)[..., ::-1].copy()
+    
+    COLOR_MAP = {
+        "Car":        (0, 255, 0),
+        "Truck":      (255, 128, 0),
+        "Bus":        (0, 128, 255),
+        "Motorbike":  (255, 0, 255),
+        "Pedestrian": (255, 255, 0),
+        "Bicycle":    (0, 255, 255),
+    }
+    
+    for det in detections:
+        label = det.get("class_name", "unknown")
+        conf  = det.get("confidence", 0.0)
+        x1, y1, x2, y2 = det.get("bbox", [0, 0, 0, 0])
+        
+        color = COLOR_MAP.get(label, (200, 200, 200))
+        
+        # Bounding box
+        cv2.rectangle(img_array, (x1, y1), (x2, y2), color, 2)
+        
+        # Label text
+        text = f"{label} {conf:.2f}"
+        (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        cv2.rectangle(img_array, (x1, y1-th-8), (x1+tw+6, y1), color, -1)
+        cv2.putText(img_array, text, (x1+3, y1-4),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+    
+    # OpenCV BGR → PIL RGB
+    result = Image.fromarray(img_array[..., ::-1])
+    return result
+
+
+def ensure_result_dir(result_id: str) -> Path:
+    """Tạo và trả về thư mục result cho result_id."""
+    result_dir = Config.RESULTS_FOLDER / result_id
+    result_dir.mkdir(parents=True, exist_ok=True)
+    return result_dir
+
+
+def allowed_media_file(filename: str, media_type: str = "both") -> bool:
+    """
+    Kiểm tra extension file hợp lệ.
+    
+    Parameters
+    ----------
+    media_type : "image" | "video" | "both"
+    """
+    IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff"}
+    VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv"}
+    
+    ext = Path(filename).suffix.lower()
+    
+    if media_type == "image":
+        return ext in IMAGE_EXTS
+    elif media_type == "video":
+        return ext in VIDEO_EXTS
+    else:
+        return ext in IMAGE_EXTS | VIDEO_EXTS

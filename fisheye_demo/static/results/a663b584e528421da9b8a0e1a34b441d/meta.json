@@ -1,0 +1,24 @@
+{
+  "result_id": "a663b584e528421da9b8a0e1a34b441d",
+  "filename": "congestion_example.jpg",
+  "summary": {
+    "output_kind": "fisheye_image",
+    "duration_s": 0.151,
+    "original_size": [
+      640,
+      480
+    ]
+  },
+  "artifacts": {
+    "fisheye_image": "fisheye_image.jpg"
+  },
+  "preprocessing": {
+    "enabled": true,
+    "strength": 0.6,
+    "radius": 0.85,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5,
+    "source_layout": "fisheye"
+  }
+}

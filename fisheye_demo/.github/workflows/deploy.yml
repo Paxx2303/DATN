@@ -1,0 +1,48 @@
+name: Deploy to GCP (WIF Mode)
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write # Bắt buộc phải có để dùng Workload Identity Federation
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          # Cấu hình phương thức Workload Identity
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Package and Upload
+        run: |
+          tar --exclude='.git' \
+              --exclude='venv' \
+              --exclude='__pycache__' \
+              --exclude='static/results/*' \
+              --exclude='static/uploads/*' \
+              -czf fisheye_deploy.tar.gz .
+
+          gcloud compute scp fisheye_deploy.tar.gz ${{ secrets.GCP_INSTANCE_NAME }}:~/ --zone=${{ secrets.GCP_ZONE }}
+
+      - name: Remote Deploy Execution
+        run: |
+          gcloud compute ssh ${{ secrets.GCP_INSTANCE_NAME }} --zone=${{ secrets.GCP_ZONE }} --command "
+            mkdir -p ~/fisheye_app
+            tar -xzf ~/fisheye_deploy.tar.gz -C ~/fisheye_app
+            rm ~/fisheye_deploy.tar.gz
+            cd ~/fisheye_app
+            sudo docker compose -f deploy/docker-compose.prod.yml up --build -d
+          "

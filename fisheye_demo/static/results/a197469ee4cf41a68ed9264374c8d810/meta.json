@@ -1,0 +1,13 @@
+{
+  "result_id": "a197469ee4cf41a68ed9264374c8d810",
+  "summary": {
+    "class_counts": {},
+    "total_objects": 0,
+    "inference_ms": 10967,
+    "camera_count": 1,
+    "counts": {}
+  },
+  "artifacts": {
+    "overview_annotated": "overview_annotated.jpg"
+  }
+}

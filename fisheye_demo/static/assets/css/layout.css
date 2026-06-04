@@ -1,0 +1,142 @@
+/* Core container */
+.app {
+  display: flex;
+  width: 100%;
+  max-width: 1440px;
+  min-height: 820px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  background: var(--color-background-primary);
+  backdrop-filter: blur(20px);
+  box-shadow: var(--shadow);
+}
+
+/* Sidebar style */
+.sidebar {
+  width: 60px;
+  background: rgba(8, 14, 21, 0.95);
+  border-right: 0.5px solid var(--color-border-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sicon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  font-size: 20px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sicon:hover,
+.sicon.active {
+  background: var(--color-background-secondary);
+  color: var(--color-text-info);
+  transform: scale(1.05);
+}
+
+/* Main Area layout */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: rgba(5, 10, 15, 0.4);
+}
+
+/* Topbar */
+.topbar {
+  height: 52px;
+  background: rgba(8, 14, 21, 0.4);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Tabs */
+.pagetabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: rgba(8, 14, 21, 0.2);
+  padding: 0 16px;
+  overflow-x: auto;
+}
+
+.ptab {
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 12px 16px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -0.5px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ptab:hover {
+  color: var(--color-text-primary);
+}
+
+.ptab.active {
+  color: var(--color-text-info);
+  border-bottom-color: var(--color-text-info);
+}
+
+/* Pages controller */
+.page {
+  display: none;
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.page.active {
+  display: block;
+}
+
+/* Media query updates */
+@media (max-width: 1024px) {
+  body {
+    padding: 10px;
+  }
+
+  .app {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: 52px;
+    flex-direction: row;
+    justify-content: center;
+    padding: 0 16px;
+    gap: 16px;
+  }
+
+  .sidebar .brand-logo {
+    margin-bottom: 0 !important;
+    margin-right: auto;
+  }
+
+  .page {
+    padding: 16px;
+  }
+}

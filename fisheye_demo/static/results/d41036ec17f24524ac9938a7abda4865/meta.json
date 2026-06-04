@@ -1,0 +1,24 @@
+{
+  "result_id": "d41036ec17f24524ac9938a7abda4865",
+  "filename": "normal_example.jpg",
+  "summary": {
+    "output_kind": "fisheye_image",
+    "duration_s": 0.275,
+    "original_size": [
+      640,
+      480
+    ]
+  },
+  "artifacts": {
+    "fisheye_image": "fisheye_image.jpg"
+  },
+  "preprocessing": {
+    "enabled": true,
+    "strength": 0.64,
+    "radius": 1.0,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5,
+    "source_layout": "fisheye"
+  }
+}

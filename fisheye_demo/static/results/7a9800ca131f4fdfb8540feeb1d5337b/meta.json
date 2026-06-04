@@ -1,0 +1,24 @@
+{
+  "result_id": "7a9800ca131f4fdfb8540feeb1d5337b",
+  "filename": "intersection_example.jpg",
+  "summary": {
+    "output_kind": "fisheye_image",
+    "duration_s": 0.164,
+    "original_size": [
+      640,
+      480
+    ]
+  },
+  "artifacts": {
+    "fisheye_image": "fisheye_image.jpg"
+  },
+  "preprocessing": {
+    "enabled": true,
+    "strength": 0.99,
+    "radius": 1.0,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5,
+    "source_layout": "fisheye"
+  }
+}

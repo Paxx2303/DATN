@@ -1,0 +1,24 @@
+{
+  "result_id": "152e5ed3a9b04e7fa1caedae38c36711",
+  "filename": "pexels-kseniya-buraya-124360874-9991461.jpg",
+  "summary": {
+    "output_kind": "fisheye_image",
+    "duration_s": 3.203,
+    "original_size": [
+      1785,
+      2692
+    ]
+  },
+  "artifacts": {
+    "fisheye_image": "fisheye_image.jpg"
+  },
+  "preprocessing": {
+    "enabled": true,
+    "strength": 0.6,
+    "radius": 0.85,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5,
+    "source_layout": "fisheye"
+  }
+}

@@ -1,210 +1,319 @@
-from __future__ import annotations
+"""
+external_camera_detector.py — Public Camera Discovery & Snapshot Capture
 
-import io
-import json
-import math
-import re
-import time
-from dataclasses import asdict, dataclass
-from enum import Enum
-from typing import Any, Optional, Tuple
+HAI MODE:
+1. snapshot: Parse HTML để tìm <img> tags có src kết thúc bằng .jpg/.jpeg
+2. stream:   Connect đến HLS/RTSP stream và chụp khung hình
+
+THIẾT KẾ:
+- Sử dụng BeautifulSoup để parse HTML.
+- Tải ảnh song song với ThreadPoolExecutor.
+- Trả về list[CameraEntry] với url, name, snapshot_image (PIL Image).
+"""
 
 import requests
+import logging
+import io
+import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageOps
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from typing import Optional
+from PIL import Image
+from bs4 import BeautifulSoup
 
+logger = logging.getLogger(__name__)
 
-class StreamType(Enum):
-    """Enum for camera stream types"""
-    YOUTUBE_LIVE = "youtube_live"
-    HTTP_SNAPSHOT = "http_snapshot"
-
-
-YOUTUBE_EMBED_PATTERN = re.compile(r"https?://www\.youtube\.com/embed/([A-Za-z0-9_-]{6,})")
-CAMERA_TITLE_PATTERN = re.compile(r"Camera[^<\n\r]{0,120}")
-
-
-def sanitize_camera_title(raw: str, *, fallback: str) -> str:
-    """Strip HTML junk often captured by CAMERA_TITLE_PATTERN (e.g. alt='Camera' />)."""
-    t = raw.strip()
-    t = re.sub(r'["\']?\s*/>.*$', "", t)
-    t = t.strip(" \"'")
-    t = re.sub(r"\s+", " ", t)
-    if len(t) < 2 or t in ('"', "'", "/>"):
-        return fallback
-    return t[:120]
+REQUEST_TIMEOUT = 10   # seconds
 
 
 @dataclass
-class ExternalCameraItem:
-    index: int
-    embed_url: str
-    youtube_id: str
-    title: str
-    snapshot_url: str
-    stream_type: StreamType = StreamType.YOUTUBE_LIVE
-    priority: int = 1
-    coordinates: Optional[Tuple[float, float]] = None
+class CameraEntry:
+    url: str                        # URL của snapshot JPG
+    name: str = ""                  # Tên camera (từ alt text hoặc URL)
+    camera_index: int = 0
+    snapshot: Optional[Image.Image] = field(default=None, repr=False)
 
 
-def extract_camera_entries(page_url: str, limit: int = 6, timeout: int = 20) -> list[ExternalCameraItem]:
-    response = requests.get(page_url, timeout=timeout)
-    response.raise_for_status()
-    html = response.text
+def extract_camera_entries(
+    source_url: str,
+    limit: int = 6,
+) -> list[CameraEntry]:
+    """
+    Phân tích HTML của trang web camera giao thông và trả về danh sách entries.
 
-    iframe_matches = re.findall(r'<iframe[^>]+src=["\']([^"\']+)["\']', html, flags=re.IGNORECASE)
-    title_matches = CAMERA_TITLE_PATTERN.findall(html)
+    Tìm kiếm theo thứ tự ưu tiên:
+    1. <img src/data-src/data-original/data-lazy-src>
+    2. <a href> links dẫn đến ảnh
+    3. CSS background-image: url(...)
+    4. URL patterns trong <script> blocks
 
-    entries: list[ExternalCameraItem] = []
-    for index, iframe_url in enumerate(iframe_matches):
-        youtube_match = YOUTUBE_EMBED_PATTERN.search(iframe_url)
-        if not youtube_match:
-            continue
+    Parameters
+    ----------
+    source_url : URL của trang web camera (vd: https://camera.0511.vn/camera.html)
+    limit      : Giới hạn số camera lấy về
 
-        youtube_id = youtube_match.group(1)
-        raw_title = title_matches[index] if index < len(title_matches) else ""
-        title = sanitize_camera_title(raw_title, fallback=f"Camera {len(entries) + 1}")
-        snapshot_url = f"https://i.ytimg.com/vi/{youtube_id}/hqdefault_live.jpg"
-        entries.append(
-            ExternalCameraItem(
-                index=len(entries),
-                embed_url=iframe_url,
-                youtube_id=youtube_id,
-                title=title,
-                snapshot_url=snapshot_url,
+    Returns
+    -------
+    list[CameraEntry] — Danh sách camera entries (chưa có snapshot image)
+    """
+    try:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0 Safari/537.36"
             )
-        )
+        }
+        resp = requests.get(source_url, headers=headers, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch camera page {source_url}: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, "lxml")
+    entries: list[CameraEntry] = []
+    seen_urls: set[str] = set()
+
+    # ── Attributes to check on <img> tags (lazy-load patterns) ──
+    _IMG_SRC_ATTRS = (
+        "src", "data-src", "data-original",
+        "data-lazy-src", "data-url", "data-image",
+    )
+    _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".gif")
+    _CAMERA_KEYWORDS = ("snap", "snapshot", "cam", "camera", "live", "view",
+                        "stream", "cctv", "traffic", "webcam")
+
+    def _looks_like_camera_url(url: str) -> bool:
+        lo = url.lower()
+        has_ext = any(lo.endswith(e) for e in _IMAGE_EXTS)
+        has_kw  = any(kw in lo for kw in _CAMERA_KEYWORDS)
+        return has_ext or has_kw
+
+    def _add_entry(raw_url: str, name: str = "") -> bool:
+        if not raw_url or raw_url.startswith("data:"):
+            return False
+        full = _resolve_url(source_url, raw_url)
+        if full in seen_urls:
+            return False
+        seen_urls.add(full)
+        entries.append(CameraEntry(
+            url=full,
+            name=name or f"Camera {len(entries) + 1}",
+            camera_index=len(entries),
+        ))
+        return True
+
+    # ── 0.5 <iframe> youtube embeds ──────────────────────────
+    for iframe in soup.find_all("iframe"):
+        src = iframe.get("src", "")
+        if "youtube.com/embed/" in src:
+            import urllib.parse
+            parsed_src = urllib.parse.urlparse(src)
+            video_id = parsed_src.path.split("/")[-1]
+            if video_id:
+                thumb_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+                
+                # Attempt to find a meaningful title from nearby text
+                name = iframe.get("title", "").strip()
+                if not name:
+                    # Look for preceding header or text
+                    prev = iframe.find_previous(["h1", "h2", "h3", "h4", "p", "div"])
+                    if prev and prev.get_text(strip=True):
+                        name = prev.get_text(strip=True)
+                
+                _add_entry(thumb_url, name or f"YouTube Live {video_id}")
         if len(entries) >= limit:
             break
 
-    return entries
+    # ── 1. <img> tags — check multiple src attributes ────────
+    if len(entries) < limit:
+        for img_tag in soup.find_all("img"):
+            src = ""
+            for attr in _IMG_SRC_ATTRS:
+                val = img_tag.get(attr, "").strip()
+                if val:
+                    src = val
+                    break
+            if not src:
+                continue
+            name = (img_tag.get("alt") or img_tag.get("title") or "").strip()
+            if _looks_like_camera_url(src):
+                _add_entry(src, name)
+            if len(entries) >= limit:
+                break
+
+    # ── 2. <a href> image links ──────────────────────────────
+    if len(entries) < limit:
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"].strip()
+            if _looks_like_camera_url(href):
+                name = a_tag.get_text(strip=True) or ""
+                _add_entry(href, name)
+            if len(entries) >= limit:
+                break
+
+    # ── 3. CSS background-image: url(...) on any tag ────────
+    if len(entries) < limit:
+        import re
+        for tag in soup.find_all(style=True):
+            matches = re.findall(
+                r'url\(["\']?(https?://[^"\')\s]+)["\']?\)',
+                tag.get("style", ""),
+            )
+            for raw in matches:
+                if _looks_like_camera_url(raw):
+                    _add_entry(raw)
+                if len(entries) >= limit:
+                    break
+            if len(entries) >= limit:
+                break
+
+    # ── 4. Script tag — regex hunt for camera image URLs ────
+    if len(entries) < limit:
+        import re
+        _URL_RE = re.compile(
+            r'(?:"|\'|=)(https?://[^\s"\'<>]+?(?:'
+            r'\.jpg|\.jpeg|\.png|snapshot|snap\.cgi|live\.jpg|cam\d|camera\d|'
+            r'/cam/|/cctv/|/traffic/)(?:[^\s"\'<>]*)?)(?:"|\')',
+            re.IGNORECASE,
+        )
+        for script in soup.find_all("script"):
+            text = script.string or ""
+            for m in _URL_RE.finditer(text):
+                url = m.group(1).rstrip("\\")
+                if _looks_like_camera_url(url):
+                    _add_entry(url)
+                if len(entries) >= limit:
+                    break
+            if len(entries) >= limit:
+                break
+
+    logger.info(f"Discovered {len(entries)} camera entries from {source_url}")
+    return entries[:limit]
 
 
-def _cache_bust(url: str) -> str:
-    sep = "&" if "?" in url else "?"
-    return f"{url}{sep}t={int(time.time() * 1000)}"
-
-
-def download_camera_snapshot(entry: ExternalCameraItem, timeout: int = 20) -> Image.Image:
-    candidates = [
-        f"https://i.ytimg.com/vi/{entry.youtube_id}/maxresdefault_live.jpg",
-        f"https://i.ytimg.com/vi/{entry.youtube_id}/hqdefault_live.jpg",
-        f"https://i.ytimg.com/vi/{entry.youtube_id}/hqdefault.jpg",
-        f"https://i.ytimg.com/vi/{entry.youtube_id}/mqdefault.jpg",
-    ]
-
-    no_cache_headers = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
-
-    last_error: Exception | None = None
-    for snapshot_url in candidates:
+def fetch_snapshots_parallel(
+    entries: list[CameraEntry],
+    max_workers: int = 4,
+) -> list[CameraEntry]:
+    """
+    Tải ảnh snapshot cho tất cả entries song song.
+    Cập nhật trường .snapshot của mỗi entry.
+    
+    Returns danh sách entries (chỉ những entry tải thành công).
+    """
+    results = []
+    
+    def _fetch_one(entry: CameraEntry) -> Optional[CameraEntry]:
         try:
-            fetch_url = _cache_bust(snapshot_url)
-            response = requests.get(fetch_url, timeout=timeout, headers=no_cache_headers)
-            response.raise_for_status()
-            image = Image.open(io.BytesIO(response.content))
-            image.load()
-            entry.snapshot_url = snapshot_url
-            return image.convert("RGB")
-        except Exception as exc:
-            last_error = exc
+            resp = requests.get(entry.url, timeout=REQUEST_TIMEOUT, stream=True)
+            resp.raise_for_status()
+            img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+            entry.snapshot = img
+            return entry
+        except Exception as e:
+            logger.warning(f"Failed to fetch snapshot {entry.url}: {e}")
+            return None
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_fetch_one, e): e for e in entries}
+        for future in as_completed(futures):
+            result = future.result()
+            if result is not None:
+                results.append(result)
+    
+    return results
 
-    raise RuntimeError(f"Unable to download snapshot for {entry.youtube_id}: {last_error}")
 
-
-def capture_stream_frame(stream_url: str, warmup_frames: int = 3) -> Image.Image:
+def capture_stream_frame(stream_url: str) -> Optional[Image.Image]:
+    """
+    Chụp một frame từ luồng HLS/RTSP/MJPEG.
+    
+    Sử dụng OpenCV VideoCapture để kết nối đến stream URL.
+    """
+    cap = cv2.VideoCapture(stream_url)
+    if not cap.isOpened():
+        logger.error(f"Cannot connect to stream: {stream_url}")
+        return None
+    
     try:
-        import cv2
-    except Exception as exc:
-        raise RuntimeError(f"OpenCV import failed while opening stream: {exc}") from exc
-
-    capture = cv2.VideoCapture(stream_url)
-    if not capture.isOpened():
-        capture.release()
-        raise RuntimeError(f"Unable to open stream source: {stream_url}")
-
-    try:
-        frame = None
-        for _ in range(max(1, warmup_frames)):
-            ok, candidate = capture.read()
-            if ok and candidate is not None:
-                frame = candidate
-        if frame is None:
-            raise RuntimeError(f"Unable to read frame from stream source: {stream_url}")
-
-        if frame.ndim != 3:
-            raise RuntimeError("Unsupported stream frame shape.")
-
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        image = Image.fromarray(np.asarray(frame_rgb), mode="RGB")
-        image.load()
-        return image
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            logger.warning(f"Empty frame from stream: {stream_url}")
+            return None
+        
+        # BGR → RGB → PIL
+        rgb = frame[..., ::-1]
+        return Image.fromarray(rgb.astype(np.uint8))
     finally:
-        capture.release()
+        cap.release()
 
 
-def build_camera_collage(items: list[dict[str, Any]], cell_size: tuple[int, int] = (640, 360)) -> Image.Image:
-    columns = 2
-    rows = max(1, math.ceil(len(items) / columns))
-    margin = 16
-    width = columns * cell_size[0] + (columns + 1) * margin
-    height = rows * cell_size[1] + (rows + 1) * margin
-
-    canvas = Image.new("RGB", (width, height), "#08131c")
-    draw = ImageDraw.Draw(canvas)
-
-    for index, item in enumerate(items):
-        row = index // columns
-        column = index % columns
-        x = margin + column * (cell_size[0] + margin)
-        y = margin + row * (cell_size[1] + margin)
-
-        image = item["annotated_image"].copy()
-        image.thumbnail(cell_size, Image.Resampling.LANCZOS)
-        pad_x = x + (cell_size[0] - image.width) // 2
-        pad_y = y + (cell_size[1] - image.height) // 2
-
-        panel = Image.new("RGB", cell_size, "#10202c")
-        panel_draw = ImageDraw.Draw(panel)
-        panel_draw.rounded_rectangle((0, 0, cell_size[0] - 1, cell_size[1] - 1), radius=18, outline="#1f394b", width=2)
-        panel.paste(image, ((cell_size[0] - image.width) // 2, (cell_size[1] - image.height) // 2))
-        canvas.paste(panel, (x, y))
-
-        label = f"{item['title']} | {item['total_objects']} obj"
-        draw.rounded_rectangle((x + 14, y + 14, x + min(cell_size[0] - 14, 14 + len(label) * 9), y + 44), radius=10, fill="#08131c")
-        draw.text((x + 24, y + 22), label, fill="#edf5fb")
-
+def build_camera_collage(
+    entries: list[CameraEntry],
+    cell_width: int = 320,
+    cell_height: int = 240,
+    cols: int = 2,
+    labels: Optional[dict[int, str]] = None,
+) -> Image.Image:
+    """
+    Tạo ảnh lưới (collage) từ nhiều camera snapshot.
+    
+    Layout: cols × ceil(n/cols) grid, mỗi cell được resize về cell_width × cell_height.
+    
+    Parameters
+    ----------
+    entries    : List CameraEntry với .snapshot đã được load
+    labels     : dict[camera_index → label_text] để overlay lên từng cell
+    
+    Returns
+    -------
+    PIL Image ảnh lưới tổng hợp
+    """
+    valid = [e for e in entries if e.snapshot is not None]
+    if not valid:
+        # Trả về ảnh đen nếu không có camera nào
+        return Image.new("RGB", (cell_width * cols, cell_height), color=(20, 20, 20))
+    
+    rows = (len(valid) + cols - 1) // cols
+    canvas_w = cell_width * cols
+    canvas_h = cell_height * rows
+    
+    canvas = Image.new("RGB", (canvas_w, canvas_h), color=(15, 15, 20))
+    
+    for i, entry in enumerate(valid):
+        row = i // cols
+        col = i % cols
+        x = col * cell_width
+        y = row * cell_height
+        
+        # Resize snapshot để fit cell
+        thumb = entry.snapshot.copy()
+        thumb.thumbnail((cell_width, cell_height), Image.LANCZOS)
+        
+        # Center trong cell
+        paste_x = x + (cell_width - thumb.width) // 2
+        paste_y = y + (cell_height - thumb.height) // 2
+        canvas.paste(thumb, (paste_x, paste_y))
+        
+        # Overlay label
+        if labels and entry.camera_index in labels:
+            _draw_label_on_pil(canvas, labels[entry.camera_index], x, y)
+    
     return canvas
 
 
-def serialize_camera_item(item: ExternalCameraItem) -> dict:
-    """Convert ExternalCameraItem dataclass to JSON-serializable dict."""
-    data = asdict(item)
-    # Convert enum to string
-    data['stream_type'] = item.stream_type.value
-    return data
+def _draw_label_on_pil(img: Image.Image, text: str, x: int, y: int) -> None:
+    """Vẽ text label lên góc trên trái của cell."""
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(img)
+    # Background rectangle
+    draw.rectangle([x, y, x + len(text)*8 + 10, y + 22], fill=(0, 0, 0, 180))
+    draw.text((x + 5, y + 4), text, fill=(0, 255, 150))
 
 
-def deserialize_camera_item(data: dict) -> ExternalCameraItem:
-    """Parse dict to ExternalCameraItem dataclass, raise ValueError if required fields missing."""
-    required_fields = {'index', 'embed_url', 'youtube_id', 'title', 'snapshot_url'}
-    if not required_fields.issubset(data.keys()):
-        missing = required_fields - set(data.keys())
-        raise ValueError(f"Missing required fields: {missing}")
-    
-    # Convert stream_type string back to enum
-    stream_type_value = data.get('stream_type', 'youtube_live')
-    try:
-        stream_type = StreamType(stream_type_value)
-    except ValueError:
-        raise ValueError(f"Invalid stream_type: {stream_type_value}")
-    
-    return ExternalCameraItem(
-        index=data['index'],
-        embed_url=data['embed_url'],
-        youtube_id=data['youtube_id'],
-        title=data['title'],
-        snapshot_url=data['snapshot_url'],
-        stream_type=stream_type,
-        priority=data.get('priority', 1),
-        coordinates=data.get('coordinates', None)
-    )
+def _resolve_url(base_url: str, relative_url: str) -> str:
+    """Giải quyết URL tương đối về URL tuyệt đối."""
+    from urllib.parse import urljoin
+    return urljoin(base_url, relative_url)

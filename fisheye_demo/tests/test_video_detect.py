@@ -1,23 +1,19 @@
-from __future__ import annotations
+"""
+tests/test_video_detect.py — Video Processing Logic Tests
+"""
 
-import unittest
-
-from fisheye_demo.video_detect import detection_stride
-
-
-class DetectionStrideTests(unittest.TestCase):
-    def test_full_rate_when_target_missing(self) -> None:
-        self.assertEqual(detection_stride(30.0, None), 1)
-        self.assertEqual(detection_stride(30.0, 0), 1)
-
-    def test_full_rate_when_target_ge_source(self) -> None:
-        self.assertEqual(detection_stride(24.0, 30.0), 1)
-        self.assertEqual(detection_stride(24.0, 24.0), 1)
-
-    def test_stride_matches_rounded_ratio(self) -> None:
-        self.assertEqual(detection_stride(30.0, 10.0), 3)
-        self.assertEqual(detection_stride(29.97, 10.0), 3)
+import pytest
+from video_detect import detection_stride
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestDetectionStride:
+    @pytest.mark.parametrize("fps_src,target_fps,expected", [
+        (30.0, 5.0, 6),
+        (25.0, 5.0, 5),
+        (30.0, 30.0, 1),   # target == source → no skipping
+        (30.0, None, 1),    # None target → process every frame
+        (30.0, 0.0, 1),     # 0 target → guard against div/0
+        (30.0, 100.0, 1),   # target > source → clamp to 1
+    ])
+    def test_stride_calculation(self, fps_src, target_fps, expected):
+        assert detection_stride(fps_src, target_fps) == expected

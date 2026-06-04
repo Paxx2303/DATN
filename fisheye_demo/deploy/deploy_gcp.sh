@@ -121,7 +121,7 @@ tar --exclude='venv' \
     -czf "${TAR_FILE}" -C . .
 
 echo "Uploading deployment package to VM..."
-gcloud compute scp "${TAR_FILE}" "${INSTANCE_NAME}:~/${TAR_FILE_NAME}" --zone="${ZONE}"
+gcloud compute scp --scp-flag="-o IPQoS=throughput" --scp-flag="-l 20000" "${TAR_FILE}" "${INSTANCE_NAME}:~/${TAR_FILE_NAME}" --zone="${ZONE}"
 
 echo "Extracting code on VM..."
 gcloud compute ssh "${INSTANCE_NAME}" --zone="${ZONE}" --command "
