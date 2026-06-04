@@ -38,11 +38,14 @@ jobs:
               -czf ../fisheye_deploy.tar.gz .
           cd ..
 
-          gcloud compute scp fisheye_deploy.tar.gz ${{ secrets.GCP_INSTANCE_NAME }}:~/ --zone=${{ secrets.GCP_ZONE }}
+          gcloud compute instances start fisheye-gpu-instance --zone=asia-southeast1-b
 
+          gcloud compute scp fisheye_deploy.tar.gz fisheye-gpu-instance:~/ --zone=asia-southeast1-b --project=project-ef8a8694-e33d-4954-ad1
+
+          
       - name: Remote Deploy Execution
         run: |
-          gcloud compute ssh ${{ secrets.GCP_INSTANCE_NAME }} --zone=${{ secrets.GCP_ZONE }} --command "
+          gcloud compute ssh fisheye-gpu-instance --zone=asia-southeast1-b --command "
             mkdir -p ~/fisheye_app
             tar -xzf ~/fisheye_deploy.tar.gz -C ~/fisheye_app
             rm ~/fisheye_deploy.tar.gz
