@@ -35,7 +35,7 @@ class Config:
     DATABASE_URL      = os.getenv("DATABASE_URL", "")  # postgresql://...
 
     # ── YOLO Model ───────────────────────────────────────────
-    DEFAULT_MODEL_KEY = os.getenv("DEFAULT_MODEL", "small")
+    DEFAULT_MODEL_KEY = os.getenv("DEFAULT_MODEL", "best")
     AVAILABLE_MODELS  = {
         "best":  str(MODEL_FOLDER / "yolo11_fisheye_v5_best.pt"),
         "nano":  str(MODEL_FOLDER / "yolo11n.pt"),

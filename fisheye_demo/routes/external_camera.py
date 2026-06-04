@@ -10,7 +10,10 @@ Endpoints:
 """
 
 import logging
+import time
+import json
 from flask import Blueprint, request, jsonify, Response, stream_with_context
+from PIL import Image
 from services.camera_monitor import camera_monitor
 from config import Config
 
@@ -68,208 +71,196 @@ def get_camera_source():
 def detect_external_camera():
     """
     Singleshot detect: thu thập một snapshot từ camera ngoài và chạy YOLO.
-
-    Form data:
-      external_camera_url : URL nguồn camera
-      camera_limit        : số camera tối đa (default 1)
-      model_key, conf, iou, source_layout
-      fisheye_strength, fisheye_radius, fisheye_effect, apply_fisheye
     """
-    import time
-    import json
     from utils.helpers import (
         generate_result_id, apply_preprocessing,
         pil_to_base64, draw_detections_on_image, ensure_result_dir,
     )
     from services.inference import run_inference
-    from services.model_registry import get_available_models, load_model
-    from analytics import heatmap, density_analyzer
+    from services.model_registry import get_available_models
+    from analytics import density_analyzer
     from alert_manager import alert_manager
     import db as database
-    import recent_image_store
     from external_camera_detector import (
         extract_camera_entries, fetch_snapshots_parallel,
         capture_stream_frame, build_camera_collage, CameraEntry,
     )
-    from PIL import Image
-    import io as _io
 
-    url          = request.form.get("external_camera_url", Config.EXT_CAM_SOURCE_URL).strip()
-    camera_limit = int(request.form.get("camera_limit", 1))
-    model_key    = request.form.get("model_key", Config.DEFAULT_MODEL_KEY)
-    conf         = float(request.form.get("conf", Config.DEFAULT_CONF))
-    iou          = float(request.form.get("iou", Config.DEFAULT_IOU))
-    source_layout = request.form.get("source_layout", "normal")
-    apply_fish_raw = request.form.get("apply_fisheye", "false").lower()
-    fisheye_enabled = apply_fish_raw == "true"
-    fisheye_strength = float(request.form.get("fisheye_strength", Config.FISHEYE_STRENGTH))
-    fisheye_radius   = float(request.form.get("fisheye_radius",   Config.FISHEYE_RADIUS))
-    fisheye_effect   = request.form.get("fisheye_effect", Config.FISHEYE_EFFECT)
-
-    if not url:
-        return jsonify({"error": "No external_camera_url provided"}), 400
-
-    t_start   = time.time()
-    result_id = generate_result_id()
-
-    # ── Determine source_mode and fetch entries ────────────────
-    import urllib.parse as _urlparse
-    parsed = _urlparse.urlparse(url)
-    is_stream = (
-        any(url.lower().endswith(ext) for ext in (".m3u8", ".mp4", ".ts", ".mjpeg"))
-        or parsed.scheme in ("rtsp", "rtmp")
-    )
-
-    entries = []
     try:
-        if is_stream:
-            frame = capture_stream_frame(url)
-            if frame:
-                e = CameraEntry(url=url, name="Live Stream", camera_index=0)
-                e.snapshot = frame
-                entries = [e]
-        else:
-            raw_entries = extract_camera_entries(url, limit=camera_limit)
-            entries = fetch_snapshots_parallel(raw_entries, max_workers=4)
-    except Exception as exc:
-        logger.warning(f"External camera snapshot failed: {exc}")
+        url          = request.form.get("external_camera_url", Config.EXT_CAM_SOURCE_URL).strip()
+        camera_limit = int(request.form.get("camera_limit", 1))
+        model_key    = request.form.get("model_key", Config.DEFAULT_MODEL_KEY)
+        conf         = float(request.form.get("conf", Config.DEFAULT_CONF))
+        iou          = float(request.form.get("iou", Config.DEFAULT_IOU))
+        source_layout = request.form.get("source_layout", "normal")
+        apply_fish_raw = request.form.get("apply_fisheye", "false").lower()
+        fisheye_enabled = apply_fish_raw == "true"
+        fisheye_strength = float(request.form.get("fisheye_strength", Config.FISHEYE_STRENGTH))
+        fisheye_radius   = float(request.form.get("fisheye_radius",   Config.FISHEYE_RADIUS))
+        fisheye_effect   = request.form.get("fisheye_effect", Config.FISHEYE_EFFECT)
 
-    # Fallback to a solid placeholder if nothing was captured
-    if not entries:
-        ph = Image.new("RGB", (640, 480), (20, 30, 50))
-        e = CameraEntry(url=url, name="Camera 1", camera_index=0)
-        e.snapshot = ph
-        entries = [e]
+        if not url:
+            return jsonify({"error": "No external_camera_url provided"}), 400
 
-    # ── Run inference on each entry ────────────────────────────
-    camera_results = []
-    all_counts: dict = {}
+        t_start   = time.time()
+        result_id = generate_result_id()
 
-    for entry in entries:
-        if entry.snapshot is None:
-            continue
+        # ── Determine source_mode and fetch entries ────────────────
+        import urllib.parse as _urlparse
+        parsed = _urlparse.urlparse(url)
+        is_stream = (
+            any(url.lower().endswith(ext) for ext in (".m3u8", ".mp4", ".ts", ".mjpeg"))
+            or parsed.scheme in ("rtsp", "rtmp")
+        )
 
-        img = entry.snapshot
-        if fisheye_enabled:
-            img = apply_preprocessing(
-                img, enabled=True,
-                strength=fisheye_strength, radius=fisheye_radius,
-                effect=fisheye_effect,
-            )
-            entry.snapshot = img
+        entries = []
+        try:
+            if is_stream:
+                frame = capture_stream_frame(url)
+                if frame:
+                    e = CameraEntry(url=url, name="Live Stream", camera_index=0)
+                    e.snapshot = frame
+                    entries = [e]
+            else:
+                raw_entries = extract_camera_entries(url, limit=camera_limit)
+                entries = fetch_snapshots_parallel(raw_entries, max_workers=4)
+        except Exception as exc:
+            logger.warning(f"External camera snapshot failed: {exc}")
 
-        result = run_inference(image=img, model_key=model_key, conf=conf, iou=iou,
-                               device=Config.DEFAULT_DEVICE)
-        annotated = draw_detections_on_image(img, result["detections"])
-        entry.snapshot = annotated
+        # Fallback to a solid placeholder if nothing was captured
+        if not entries:
+            ph = Image.new("RGB", (640, 480), (20, 30, 50))
+            e = CameraEntry(url=url, name="Camera 1", camera_index=0)
+            e.snapshot = ph
+            entries = [e]
 
-        for cls, cnt in result["counts"].items():
-            all_counts[cls] = all_counts.get(cls, 0) + cnt
+        # ── Run inference on each entry ────────────────────────────
+        camera_results = []
+        all_counts: dict = {}
 
-        camera_results.append({
-            "title":         entry.name,
-            "total_objects": result["total"],
-            "annotated":     f"data:image/jpeg;base64,{pil_to_base64(annotated)}",
-            "youtube_id":    "",
-        })
+        for entry in entries:
+            if entry.snapshot is None:
+                continue
 
-        # Update analytics
-        density_analyzer.record(result["total"])
-        alert_manager.check_and_alert(result["total"], camera_source=entry.name)
+            img = entry.snapshot
+            if fisheye_enabled:
+                img = apply_preprocessing(
+                    img, enabled=True,
+                    strength=fisheye_strength, radius=fisheye_radius,
+                    effect=fisheye_effect,
+                )
+                entry.snapshot = img
 
-    # ── Build collage overview ─────────────────────────────────
-    camera_labels = {e.camera_index: f"{e.name}: {r['total_objects']}"
-                     for e, r in zip(entries, camera_results) if e.snapshot is not None}
-    collage = build_camera_collage(entries, cell_width=320, cell_height=240, cols=2,
-                                   labels=camera_labels)
-    overview_b64 = f"data:image/jpeg;base64,{pil_to_base64(collage)}"
+            # Run inference
+            result = run_inference(image=img, model_key=model_key, conf=conf, iou=iou,
+                                  device=Config.DEFAULT_DEVICE)
+            annotated = draw_detections_on_image(img, result["detections"])
+            entry.snapshot = annotated
 
-    # ── Save to disk + DB ──────────────────────────────────────
-    result_dir = ensure_result_dir(result_id)
-    collage.save(result_dir / "overview_annotated.jpg", "JPEG", quality=85)
-    total_objects = sum(r["total_objects"] for r in camera_results)
-    inference_ms  = int((time.time() - t_start) * 1000)
-    summary = {
-        "class_counts":  all_counts,
-        "total_objects": total_objects,
-        "inference_ms":  inference_ms,
-        "camera_count":  len(camera_results),
-        "counts":        all_counts,
-    }
-    artifacts = {"overview_annotated": "overview_annotated.jpg"}
-    with open(result_dir / "meta.json", "w") as f:
-        json.dump({"result_id": result_id, "summary": summary,
-                   "artifacts": artifacts}, f, indent=2)
+            for cls, cnt in result["counts"].items():
+                all_counts[cls] = all_counts.get(cls, 0) + cnt
 
-    record_data = {
-        "id":            result_id,
-        "filename":      f"external_camera_{len(camera_results)}cam",
-        "task":          "detect",
-        "media_type":    "image",
-        "source_layout": "fisheye" if fisheye_enabled else "normal",
-        "preprocessing": {"enabled": fisheye_enabled},
-        "summary":       summary,
-        "artifacts":     artifacts,
-        "gcs_urls":      {},
-    }
-    try:
-        database.insert_detection(record_data)
-    except Exception as exc:
-        logger.warning(f"Failed to save external camera detection: {exc}")
+            camera_results.append({
+                "title":         entry.name,
+                "total_objects": result["total"],
+                "annotated":     f"data:image/jpeg;base64,{pil_to_base64(annotated)}",
+                "youtube_id":    "",
+            })
 
-    from routes.history import inject_artifact_urls
-    record_with_urls = inject_artifact_urls(record_data)
+            # Update analytics
+            density_analyzer.record(result["total"])
+            alert_manager.check_and_alert(result["total"], camera_source=entry.name)
 
-    avail = get_available_models()
-    model_name = avail.get(model_key, {}).get("name", f"YOLO {model_key.capitalize()}")
+        # ── Build collage overview ─────────────────────────────────
+        camera_labels = {e.camera_index: f"{e.name}: {r['total_objects']}"
+                         for e, r in zip(entries, camera_results) if e.snapshot is not None}
+        collage = build_camera_collage(entries, cell_width=320, cell_height=240, cols=2,
+                                       labels=camera_labels)
+        overview_b64 = f"data:image/jpeg;base64,{pil_to_base64(collage)}"
 
-    return jsonify({
-        "record":       record_with_urls,
-        "request_id":   result_id,
-        "camera_count": len(camera_results),
-        "overview":     overview_b64,
-        "cameras":      camera_results,
-        "summary":      summary,
-        "preprocessing": {
-            "enabled":       fisheye_enabled,
-            "source_layout": "fisheye" if fisheye_enabled else source_layout,
-        },
-        "model": {"loaded_from_name": model_name},
-    }), 200
+        # ── Save to disk + DB ──────────────────────────────────────
+        result_dir = ensure_result_dir(result_id)
+        collage.save(result_dir / "overview_annotated.jpg", "JPEG", quality=85)
+        
+        total_objects = sum(r["total_objects"] for r in camera_results)
+        inference_ms  = int((time.time() - t_start) * 1000)
+        
+        summary = {
+            "class_counts":  all_counts,
+            "total_objects": total_objects,
+            "inference_ms":  inference_ms,
+            "camera_count":  len(camera_results),
+            "counts":        all_counts,
+        }
+        artifacts = {"overview_annotated": "overview_annotated.jpg"}
+        
+        with open(result_dir / "meta.json", "w") as f:
+            json.dump({"result_id": result_id, "summary": summary,
+                       "artifacts": artifacts}, f, indent=2)
+
+        record_data = {
+            "id":            result_id,
+            "filename":      f"external_camera_{len(camera_results)}cam",
+            "task":          "detect",
+            "media_type":    "image",
+            "source_layout": "fisheye" if fisheye_enabled else "normal",
+            "preprocessing": {"enabled": fisheye_enabled},
+            "summary":       summary,
+            "artifacts":     artifacts,
+            "gcs_urls":      {},
+        }
+        
+        try:
+            database.insert_detection(record_data)
+        except Exception as exc:
+            logger.error(f"Failed to save external camera detection to DB: {exc}")
+
+        from routes.history import inject_artifact_urls
+        record_with_urls = inject_artifact_urls(record_data)
+
+        avail = get_available_models()
+        model_info = avail.get(model_key, {})
+        model_name = model_info.get("name", f"YOLO {model_key.capitalize()}")
+
+        return jsonify({
+            "record":       record_with_urls,
+            "request_id":   result_id,
+            "camera_count": len(camera_results),
+            "overview":     overview_b64,
+            "cameras":      camera_results,
+            "summary":      summary,
+            "preprocessing": {
+                "enabled":       fisheye_enabled,
+                "source_layout": "fisheye" if fisheye_enabled else source_layout,
+            },
+            "model": {"loaded_from_name": model_name},
+        }), 200
+        
+    except Exception as e:
+        logger.exception("Error in detect_external_camera endpoint")
+        return jsonify({
+            "error": str(e),
+            "type": type(e).__name__,
+            "message": "Internal Server Error during detection"
+        }), 500
 
 
 @ext_cam_bp.route("/start", methods=["POST"])
 def start_monitor():
     """
     Kích hoạt live monitoring.
-    
-    JSON body:
-      source_mode    : "snapshot" | "stream"
-      source_url     : URL của trang camera (snapshot mode)
-      stream_url     : URL HLS/RTSP (stream mode)
-      camera_limit   : số camera tối đa
-      interval       : polling interval (giây)
-      model_key      : YOLO model key
-      conf           : confidence threshold
-      iou            : IOU threshold
-      device         : "cpu" | "cuda:0"
-      fisheye        : bool — bật fisheye
-      fisheye_strength, fisheye_radius, fisheye_effect : float/str
     """
-    # Accept both JSON body and multipart/form-data (sent by frontend FormData)
     if request.content_type and "application/json" in request.content_type:
         data = request.get_json(silent=True) or {}
     else:
         data = {k: v for k, v in request.form.items()}
     
-    # Field aliases — frontend FormData uses different keys than the JSON API
     source_url = data.get("source_url") or data.get("external_camera_url", "") or Config.EXT_CAM_SOURCE_URL
     interval   = float(data.get("interval") or data.get("interval_seconds") or Config.EXT_CAM_INTERVAL)
     device     = data.get("device") or data.get("compute_mode") or Config.DEFAULT_DEVICE
     fisheye_on = data.get("fisheye", data.get("apply_fisheye", "false"))
     fisheye_on = str(fisheye_on).lower() in ("true", "1", "yes")
 
-    # Parse fisheye config
     fisheye_config = {}
     if fisheye_on:
         fisheye_config = {
@@ -312,15 +303,7 @@ def get_status():
 
 @ext_cam_bp.route("/live/stream")
 def live_stream():
-    """
-    MJPEG stream endpoint.
-    
-    Query params:
-      view : "overview" | "camera_0" | "camera_1" | ... (default: overview)
-    
-    Response: multipart/x-mixed-replace;boundary=frame
-    Browsers render này trực tiếp với <img src="/api/external-camera/live/stream">
-    """
+    """MJPEG stream endpoint."""
     view = request.args.get("view", "overview")
     
     def generate():
