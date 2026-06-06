@@ -112,24 +112,50 @@ gcloud compute ssh "${INSTANCE_NAME}" --zone="${ZONE}" --command "
 rm "${TAR_FILE}"
 
 echo "=== [5/5] Building and Running the App in CPU Mode ==="
+# Create a deployment script on the VM to run asynchronously
 gcloud compute ssh "${INSTANCE_NAME}" --zone="${ZONE}" --command "
-  cd ~/fisheye_app
-  # Wait for startup script to finish installing Docker
-  echo 'Waiting for startup-script (docker) installation to complete...'
-  while [ ! -f /var/log/gce-startup.log ] || ! grep -q 'VM Initialization Finished successfully' /var/log/gce-startup.log; do
-    echo '...still waiting for installation packages...'
-    sleep 10
-  done
-  echo 'Startup script finished installing dependencies.'
+cat > ~/deploy_app.sh << 'DEPLOY_SCRIPT'
+#!/bin/bash
+set -x
+cd ~/fisheye_app
 
-  # Run Production Compose
-  echo 'Starting Docker Compose production stack (CPU Mode)...'
-  sudo docker compose -f deploy/docker-compose.prod-cpu.yml down || true
-  sudo docker compose -f deploy/docker-compose.prod-cpu.yml up --build -d
-  
-  echo 'Service status:'
-  sudo docker compose -f deploy/docker-compose.prod-cpu.yml ps
+# Wait for startup script to finish installing Docker
+echo 'Waiting for startup-script (docker) installation to complete...'
+while [ ! -f /var/log/gce-startup.log ] || ! grep -q 'VM Initialization Finished successfully' /var/log/gce-startup.log; do
+  echo '...still waiting for installation packages...'
+  sleep 10
+done
+echo 'Startup script finished installing dependencies.'
+
+# Run Production Compose
+echo 'Starting Docker Compose production stack (CPU Mode)...'
+sudo docker compose -f deploy/docker-compose.prod-cpu.yml down || true
+sudo docker compose -f deploy/docker-compose.prod-cpu.yml up --build -d
+
+echo 'Service status:'
+sudo docker compose -f deploy/docker-compose.prod-cpu.yml ps
+echo 'Deployment completed at \$(date)' > ~/deployment_complete.flag
+DEPLOY_SCRIPT
+
+chmod +x ~/deploy_app.sh
 "
+
+echo "Starting deployment in background (this will continue even if SSH disconnects)..."
+gcloud compute ssh "${INSTANCE_NAME}" --zone="${ZONE}" --command "
+  nohup bash ~/deploy_app.sh > ~/deploy.log 2>&1 &
+  echo 'Deployment started in background. Check ~/deploy.log for progress.'
+"
+
+echo ""
+echo "Deployment is running in background on the VM."
+echo "To check progress, run:"
+echo "  gcloud compute ssh ${INSTANCE_NAME} --zone=${ZONE} --command 'tail -f ~/deploy.log'"
+echo ""
+echo "To check if deployment is complete:"
+echo "  gcloud compute ssh ${INSTANCE_NAME} --zone=${ZONE} --command 'ls -la ~/deployment_complete.flag'"
+echo ""
+echo "Waiting 30 seconds before checking status..."
+sleep 30
 
 # Retrieve VM External IP
 VM_IP=$(gcloud compute instances describe "${INSTANCE_NAME}" --zone="${ZONE}" --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
