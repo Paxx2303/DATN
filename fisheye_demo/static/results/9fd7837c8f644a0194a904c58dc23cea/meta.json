@@ -1,0 +1,45 @@
+{
+  "result_id": "9fd7837c8f644a0194a904c58dc23cea",
+  "filename": "camera1_A_118.png",
+  "summary": {
+    "counts": {
+      "Pedestrian": 1
+    },
+    "total": 1,
+    "avg_speed": 0.0,
+    "duration_s": 0.302,
+    "model_key": "traffic",
+    "original_size": [
+      1245,
+      1088
+    ]
+  },
+  "artifacts": {
+    "annotated": "annotated.jpg"
+  },
+  "preprocessing": {
+    "enabled": false,
+    "strength": 0.6,
+    "radius": 0.85,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5
+  },
+  "detections": [
+    {
+      "class_name": "Pedestrian",
+      "class_raw": "person",
+      "confidence": 0.847,
+      "bbox": [
+        0,
+        0,
+        115,
+        1088
+      ],
+      "center": [
+        57,
+        544
+      ]
+    }
+  ]
+}

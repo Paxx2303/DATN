@@ -4,7 +4,7 @@
 import { elements, setToast, setLoading } from './Layout.js';
 import { appState } from '../state/appState.js';
 import { ApiService } from '../services/api.js';
-import { escapeHtml, normalizeExternalCameraUrl } from '../utils/helpers.js';
+import { escapeHtml, normalizeExternalCameraUrl, resolveApplyFisheye } from '../utils/helpers.js';
 import { renderMedia, setArtifactLinks } from './Workspace.js';
 
 export function initLiveStreams(classNames, classColors, onJobCompleted) {
@@ -16,9 +16,6 @@ export function initLiveStreams(classNames, classColors, onJobCompleted) {
   elements.externalCameraLiveRefresh.addEventListener("click",
     () => loadExternalCameraLiveStatus(false, { forceRedraw: true }));
 
-  elements.externalCameraLiveUiFps.addEventListener("input", () => {
-    if (appState.liveMonitorRunning) syncExternalCameraLivePolling();
-  });
   elements.externalCameraUrl.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); loadExternalCamera(); }
   });
@@ -26,18 +23,21 @@ export function initLiveStreams(classNames, classColors, onJobCompleted) {
   setExternalCameraLiveButtons(false);
 }
 
-function getLiveUiPollMs() {
-  const raw = Number.parseFloat(elements.externalCameraLiveUiFps.value);
-  const fps = Number.isFinite(raw) ? Math.min(60, Math.max(1, raw)) : 15;
-  return Math.max(16, Math.round(1000 / fps));
+function getLivePollMs(intervalSeconds = 0.5, actualCycleMs = null) {
+  if (Number.isFinite(actualCycleMs) && actualCycleMs > 0) {
+    return Math.max(200, Math.round(actualCycleMs));
+  }
+  const interval = Number(intervalSeconds);
+  const seconds = Number.isFinite(interval) && interval > 0 ? interval : 0.5;
+  return Math.max(200, Math.round(seconds * 1000));
 }
 
 export async function loadExternalCamera(urlOverride = null) {
   const normalizedUrl = normalizeExternalCameraUrl(urlOverride ?? "https://camera.0511.vn/camera.html");
   if (!normalizedUrl) { setToast("Nhập URL camera hợp lệ."); return; }
   if (elements.externalCameraUrl) elements.externalCameraUrl.value = normalizedUrl;
-  elements.externalCameraOpen.href  = normalizedUrl;
-  elements.externalCameraFrame.src  = "about:blank";
+  elements.externalCameraOpen.href = normalizedUrl;
+  elements.externalCameraFrame.src = "about:blank";
 
   try {
     const data = await ApiService.fetchExternalCameraSource(normalizedUrl);
@@ -64,6 +64,32 @@ export async function loadExternalCamera(urlOverride = null) {
     }
     setToast(error.message || "Không tải được video camera.");
   }
+}
+
+function formatCameraSpeedBadge(camera) {
+  const avg = camera.avg_speed_kmh ?? 0;
+  const max = camera.max_speed_kmh ?? 0;
+  if (avg <= 0 && max <= 0) {
+    return "<span>—</span>";
+  }
+  const lines = [];
+  if (avg > 0) lines.push(`<span>TB ${avg.toFixed(0)} km/h</span>`);
+  if (max > 0) lines.push(`<span>Max ${max.toFixed(0)} km/h</span>`);
+  return lines.join("");
+}
+
+function formatCameraMeta(camera) {
+  const count = camera.total_objects ?? camera.count ?? 0;
+  const speeds = camera.vehicle_speeds || [];
+  if (!speeds.length) {
+    return `${count} xe`;
+  }
+  const speedText = speeds
+    .slice(0, 3)
+    .map((item) => `${item.class_name} ${Number(item.speed_kmh).toFixed(0)}km/h`)
+    .join(" · ");
+  const suffix = speeds.length > 3 ? " · ..." : "";
+  return `${count} xe · ${speedText}${suffix}`;
 }
 
 // ── Camera grid (snapshot + live non-stream mode) ───────────────────────────
@@ -101,8 +127,7 @@ function renderExternalCameraGrid(data, cacheBustToken = null) {
     const speedEl = document.createElement("div");
     speedEl.className = "cam-speed-badge";
     speedEl.id = `cam-speed-${camera.index ?? 0}`;
-    const spd = camera.avg_speed_kmh ?? 0;
-    speedEl.innerHTML = `<span>${spd > 0 ? spd.toFixed(0) + " km/h" : "—"}</span>`;
+    speedEl.innerHTML = formatCameraSpeedBadge(camera);
 
     // Congestion badge (bottom-left overlay)
     const congEl = document.createElement("div");
@@ -117,7 +142,7 @@ function renderExternalCameraGrid(data, cacheBustToken = null) {
     titleEl.textContent = camera.title || camera.name || "";
     const meta = document.createElement("span");
     meta.id = `cam-meta-${camera.index ?? 0}`;
-    meta.textContent = `${camera.total_objects ?? camera.count ?? 0} objects`;
+    meta.textContent = formatCameraMeta(camera);
 
     copy.append(titleEl, meta);
     article.append(img, speedEl, congEl, copy);
@@ -125,18 +150,36 @@ function renderExternalCameraGrid(data, cacheBustToken = null) {
   }
 }
 
-/** Update speed/congestion overlays on existing camera items from live status data */
-function updateCameraOverlays(cameras) {
+/** Update speed/congestion overlays AND images on existing camera items from live status data */
+function updateCameraOverlays(cameras, cacheBustToken = null) {
   if (!cameras || !cameras.length) return;
   for (const cam of cameras) {
     const idx = cam.index ?? 0;
+    const article = elements.externalCameraResults.querySelector(`[data-cam-index="${idx}"]`);
+
+    // Update image src if we have a new cache bust token
+    if (article && cacheBustToken != null) {
+      const img = article.querySelector('img');
+      if (img && cam.annotated) {
+        let src = cam.annotated;
+        if (!src.startsWith("data:")) {
+          src = `${src}?_=${String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "")}`;
+        }
+        // Only update src if it's different to avoid flicker
+        const currentSrc = img.src.split('?')[0];
+        const newSrc = src.split('?')[0];
+        if (currentSrc !== newSrc || cacheBustToken) {
+          img.src = src;
+        }
+      }
+    }
+
     const speedEl = document.getElementById(`cam-speed-${idx}`);
-    const congEl  = document.getElementById(`cam-cong-${idx}`);
-    const metaEl  = document.getElementById(`cam-meta-${idx}`);
+    const congEl = document.getElementById(`cam-cong-${idx}`);
+    const metaEl = document.getElementById(`cam-meta-${idx}`);
 
     if (speedEl) {
-      const spd = cam.avg_speed_kmh ?? 0;
-      speedEl.innerHTML = `<span>${spd > 0 ? spd.toFixed(0) + " km/h" : "—"}</span>`;
+      speedEl.innerHTML = formatCameraSpeedBadge(cam);
     }
     if (congEl) {
       const lvl = cam.congestion?.level || "low";
@@ -144,7 +187,7 @@ function updateCameraOverlays(cameras) {
       congEl.textContent = lvl.toUpperCase();
     }
     if (metaEl) {
-      metaEl.textContent = `${cam.count ?? 0} objects`;
+      metaEl.textContent = formatCameraMeta(cam);
     }
   }
 }
@@ -170,17 +213,20 @@ function updateCongestionPanel(liveResult) {
         `<span style="color:var(--color-text-tertiary); font-size:10.5px;">Chưa có dữ liệu.</span>`;
       return;
     }
-    elements.congestionDetail.innerHTML = `<div class="cong-row">${
-      cameras.map(cam => {
-        const cl  = (cam.congestion?.level || "low").toLowerCase();
-        const sc  = ((cam.congestion?.score || 0) * 100).toFixed(0);
-        const spd = cam.avg_speed_kmh ?? 0;
-        return `<div class="cong-cam cong-${cl}">
+    elements.congestionDetail.innerHTML = `<div class="cong-row">${cameras.map(cam => {
+      const cl = (cam.congestion?.level || "low").toLowerCase();
+      const sc = ((cam.congestion?.score || 0) * 100).toFixed(0);
+      const avg = cam.avg_speed_kmh ?? 0;
+      const max = cam.max_speed_kmh ?? 0;
+      const speedPart = max > 0
+        ? `${avg > 0 ? avg.toFixed(0) : "–"}/${max.toFixed(0)}km/h`
+        : (avg > 0 ? `${avg.toFixed(0)}km/h` : "–");
+      return `<div class="cong-cam cong-${cl}">
           <span class="cong-cam-name">${escapeHtml(cam.name || "")}</span>
-          <span class="cong-cam-stats">${cam.count ?? 0}v · ${cl.toUpperCase()} (${sc}%) · ${spd > 0 ? spd.toFixed(0) + "km/h" : "–"}</span>
+          <span class="cong-cam-stats">${cam.count ?? 0}v · ${cl.toUpperCase()} (${sc}%) · ${speedPart}</span>
         </div>`;
-      }).join("")
-    }</div>`;
+    }).join("")
+      }</div>`;
   }
 }
 
@@ -221,19 +267,21 @@ function attachExternalCameraLiveStreams() {
   elements.externalCameraResults.replaceChildren();
   // Show stream items for each known camera (up to 4)
   const camCount = (appState.lastLiveResult?.camera_count) || 1;
+  const liveCameras = appState.lastLiveResult?.cameras || [];
   for (let i = 0; i < Math.min(camCount, 4); i++) {
+    const cam = liveCameras[i] || {};
     const article = document.createElement("article");
     article.className = "external-result-item";
     article.dataset.camIndex = String(i);
 
     const img = document.createElement("img");
     img.src = `/api/external-camera/live/stream?view=camera_${i}&_=${seed}`;
-    img.alt = `Camera ${i + 1} live`;
+    img.alt = cam.title || cam.name || `Camera ${i + 1} live`;
 
     const speedEl = document.createElement("div");
     speedEl.className = "cam-speed-badge";
     speedEl.id = `cam-speed-${i}`;
-    speedEl.innerHTML = "<span>—</span>";
+    speedEl.innerHTML = formatCameraSpeedBadge(cam);
 
     const congEl = document.createElement("div");
     congEl.className = "cam-cong-badge low";
@@ -243,10 +291,10 @@ function attachExternalCameraLiveStreams() {
     const copy = document.createElement("div");
     copy.className = "external-result-copy";
     const titleEl = document.createElement("strong");
-    titleEl.textContent = `Camera ${i + 1}`;
+    titleEl.textContent = cam.title || cam.name || `Camera ${i + 1}`;
     const meta = document.createElement("span");
     meta.id = `cam-meta-${i}`;
-    meta.textContent = "MJPEG feed";
+    meta.textContent = formatCameraMeta(cam) || "MJPEG feed";
     copy.append(titleEl, meta);
     article.append(img, speedEl, congEl, copy);
     elements.externalCameraResults.appendChild(article);
@@ -255,7 +303,7 @@ function attachExternalCameraLiveStreams() {
 
 function setExternalCameraLiveButtons(isRunning) {
   if (elements.externalCameraLiveStart) elements.externalCameraLiveStart.disabled = isRunning;
-  if (elements.externalCameraLiveStop)  elements.externalCameraLiveStop.disabled  = !isRunning;
+  if (elements.externalCameraLiveStop) elements.externalCameraLiveStop.disabled = !isRunning;
 }
 
 export function syncExternalCameraLivePolling() {
@@ -264,7 +312,10 @@ export function syncExternalCameraLivePolling() {
     appState.livePollTimer = null;
   }
   if (appState.liveMonitorRunning) {
-    const ms = getLiveUiPollMs();
+    const ms = getLivePollMs(
+      appState.liveIntervalSeconds,
+      appState.liveCycleDurationMs,
+    );
     appState.livePollTimer = window.setInterval(() => loadExternalCameraLiveStatus(true), ms);
     loadExternalCameraLiveStatus(true);
   }
@@ -280,24 +331,33 @@ export async function loadExternalCameraLiveStatus(silent = false, options = {})
 }
 
 function renderExternalCameraLiveStatus(data, options = {}) {
-  const forceRedraw    = Boolean(options.forceRedraw);
-  const running        = Boolean(data.running);
-  const statusLabel    = String(data.status || (running ? "active" : "stopped")).toUpperCase();
-  const lastUpdated    = data.last_updated_at || "not updated yet";
-  const interval       = Number(data.interval_seconds || elements.externalCameraLiveInterval.value || 0);
-  const targetFps      = interval > 0 ? (1 / interval).toFixed(1) : "0.0";
-  const cycleCount     = data.cycle_count || 0;
-  const uiPollMs       = getLiveUiPollMs();
-  const uiFpsLabel     = (1000 / uiPollMs).toFixed(1);
+  const forceRedraw = Boolean(options.forceRedraw);
+  const running = Boolean(data.running);
+  const statusLabel = String(data.status || (running ? "active" : "stopped")).toUpperCase();
+  const lastUpdated = data.last_updated_at || "not updated yet";
+  const interval = Number(data.interval_seconds || elements.externalCameraLiveInterval.value || 0.5);
+  const cycleCount = data.cycle_count || 0;
   const actualCycleFps = data.actual_cycle_fps != null ? Number(data.actual_cycle_fps).toFixed(2) : "—";
-  const cycleDurMs     = data.last_cycle_duration_ms != null ? Number(data.last_cycle_duration_ms).toFixed(1) : "—";
-  const spd            = data.speed_summary?.avg_kmh ?? 0;
-  const errorBlock     = data.error ? `<span style="color:var(--color-text-danger)">⚠ ${escapeHtml(data.error)}</span>` : "";
+  const cycleDurMs = data.last_cycle_duration_ms != null ? Number(data.last_cycle_duration_ms).toFixed(1) : "—";
+  const displayFps = actualCycleFps !== "—" ? actualCycleFps : (interval > 0 ? (1 / interval).toFixed(2) : "—");
+
+  const nextPollMs = getLivePollMs(interval, data.last_cycle_duration_ms);
+  appState.set("liveIntervalSeconds", interval);
+  if (data.last_cycle_duration_ms != null) {
+    appState.set("liveCycleDurationMs", Number(data.last_cycle_duration_ms));
+  }
+  if (running && appState.livePollMs !== nextPollMs) {
+    appState.set("livePollMs", nextPollMs);
+    syncExternalCameraLivePolling();
+  }
+  const avgSpd = data.speed_summary?.avg_kmh ?? 0;
+  const maxSpd = data.speed_summary?.max_kmh ?? 0;
+  const errorBlock = data.error ? `<span style="color:var(--color-text-danger)">⚠ ${escapeHtml(data.error)}</span>` : "";
 
   elements.externalCameraLiveStatus.innerHTML = `
     <strong>Live monitor ${statusLabel}</strong>
-    <span>Cycle ${interval.toFixed(1)}s | ${targetFps} fps target | ${actualCycleFps} fps actual | ${cycleDurMs} ms | UI ~${uiFpsLabel} fps | Cycles: ${cycleCount}</span>
-    <span>Avg speed: ${spd > 0 ? spd.toFixed(1) + " km/h" : "—"} | Congestion: ${(data.congestion_summary?.level || "—").toUpperCase()} | Updated: ${lastUpdated}</span>
+    <span>Cycle ${interval.toFixed(1)}s | ${displayFps} fps (ảnh mới nhất) | ${cycleDurMs} ms/chu kỳ | Cycles: ${cycleCount}</span>
+    <span>Speed TB: ${avgSpd > 0 ? avgSpd.toFixed(1) + " km/h" : "—"} | Max: ${maxSpd > 0 ? maxSpd.toFixed(1) + " km/h" : "—"} | Congestion: ${(data.congestion_summary?.level || "—").toUpperCase()} | Updated: ${lastUpdated}</span>
     ${errorBlock}
   `;
 
@@ -317,12 +377,14 @@ function renderExternalCameraLiveStatus(data, options = {}) {
   }
 
   const liveResult = data.last_result;
+  const lastUpdatedRaw = data.last_updated_at || null;
 
   // Always update congestion panel + camera overlays if we have live data
   if (liveResult) {
     appState.set("lastLiveResult", liveResult);
+    const bust = `${cycleCount}-${String(lastUpdatedRaw || "").replace(/\D/g, "").slice(-12)}`;
     updateCongestionPanel(liveResult);
-    updateCameraOverlays(liveResult.cameras || []);
+    updateCameraOverlays(liveResult.cameras || [], bust);
     updateLiveStatsBar(data, liveResult);
     refreshAlertPanel();
   } else {
@@ -330,8 +392,6 @@ function renderExternalCameraLiveStatus(data, options = {}) {
   }
 
   if (!liveResult) return;
-
-  const lastUpdatedRaw = data.last_updated_at || null;
   const framesAdvanced = forceRedraw || !running ||
     cycleCount !== appState.lastLiveCycleCount ||
     lastUpdatedRaw !== appState.lastLiveUpdatedAt;
@@ -356,11 +416,11 @@ function renderExternalCameraLiveStatus(data, options = {}) {
     } else {
       // Stream ready — MJPEG active, just update overlays
       renderExternalCameraSummary(liveResult);
-      elements.requestId.textContent    = "live-monitor";
-      elements.savedResult.textContent  = "mjpeg stream";
+      elements.requestId.textContent = "live-monitor";
+      elements.savedResult.textContent = "mjpeg stream";
       elements.preprocessedMeta.textContent =
         liveResult.preprocessing?.enabled ? "fisheye streaming" : "raw streaming";
-      elements.resultMeta.textContent   = `${liveResult.camera_count} cameras`;
+      elements.resultMeta.textContent = `${liveResult.camera_count} cameras`;
     }
     return;
   }
@@ -383,7 +443,7 @@ function renderExternalCameraLiveStatus(data, options = {}) {
 
 function buildExternalCameraFormData() {
   const formData = new FormData();
-  const inferredLayout = elements.sourceLayout.value === "fisheye" ? "normal" : elements.sourceLayout.value;
+  const sourceLayout = elements.sourceLayout.value;
   const computeMode = elements.externalCameraComputeMode.value;
   formData.append("external_camera_url", "https://camera.0511.vn/camera.html");
   formData.append("compute_mode", computeMode);
@@ -391,19 +451,20 @@ function buildExternalCameraFormData() {
   formData.append("model_key", elements.modelKey.value);
   formData.append("conf", elements.confidence.value);
   formData.append("iou", elements.iou.value);
-  formData.append("source_layout", inferredLayout);
+  formData.append("source_layout", sourceLayout);
   formData.append("fisheye_strength", elements.fisheyeStrength.value);
   formData.append("fisheye_radius", elements.fisheyeRadius.value);
   formData.append("fisheye_effect", elements.fisheyeEffect.value);
-  const applyValue = elements.fisheyeEnabled.value === "true" ? "true"
-                   : elements.fisheyeEnabled.value === "false" ? "false" : "";
-  if (applyValue) formData.append("apply_fisheye", applyValue);
+  formData.append(
+    "apply_fisheye",
+    resolveApplyFisheye(elements.fisheyeEnabled.value, sourceLayout, { forLive: true }),
+  );
   return formData;
 }
 
 async function startExternalCameraLive() {
   const formData = buildExternalCameraFormData();
-  formData.append("interval_seconds", elements.externalCameraLiveInterval.value || "1.0");
+  formData.append("interval_seconds", elements.externalCameraLiveInterval.value || "0.5");
   try {
     const data = await ApiService.startExternalCameraLive(formData);
     renderExternalCameraLiveStatus(data);
@@ -431,10 +492,10 @@ async function runExternalCameraDetection(classNames, classColors, onJobComplete
   try {
     const data = await ApiService.runExternalCameraDetection(formData);
     appState.set("latestRecord", data.record);
-    elements.requestId.textContent    = data.request_id;
-    elements.savedResult.textContent  = data.record.id;
+    elements.requestId.textContent = data.request_id;
+    elements.savedResult.textContent = data.record.id;
     elements.preprocessedMeta.textContent = data.preprocessing.enabled ? "fisheye snapshots" : "raw snapshots";
-    elements.resultMeta.textContent   = `${data.camera_count} cameras`;
+    elements.resultMeta.textContent = `${data.camera_count} cameras`;
 
     renderMedia(elements.resultMedia, data.overview, "image");
     renderExternalCameraGrid(data);
@@ -454,7 +515,7 @@ async function runExternalCameraDetection(classNames, classColors, onJobComplete
 
 function renderExternalCameraSummary(data, classNames, classColors) {
   const summary = data.summary || {};
-  const counts  = summary.class_counts || {};
+  const counts = summary.class_counts || {};
 
   if (classNames && classColors) {
     elements.statsGrid.innerHTML = classNames.map((name) => `
@@ -464,7 +525,8 @@ function renderExternalCameraSummary(data, classNames, classColors) {
       </div>`).join("");
   }
 
-  const spd  = data.speed_summary?.avg_kmh ?? 0;
+  const avgSpd = data.speed_summary?.avg_kmh ?? 0;
+  const maxSpd = data.speed_summary?.max_kmh ?? 0;
   const cong = data.congestion_summary?.level ?? "—";
   elements.summaryRow.innerHTML = `
     <div class="summary-pill">Task detect</div>
@@ -473,7 +535,8 @@ function renderExternalCameraSummary(data, classNames, classColors) {
     <div class="summary-pill">Objects ${summary.total_objects || 0}</div>
     <div class="summary-pill">Inference ${summary.inference_ms || 0} ms</div>
     <div class="summary-pill" style="${cong === 'high' ? 'color:var(--color-text-danger);' : ''}">Congestion ${cong.toUpperCase()}</div>
-    <div class="summary-pill">Avg speed ${spd > 0 ? spd.toFixed(1) + " km/h" : "—"}</div>
+    <div class="summary-pill">Speed TB ${avgSpd > 0 ? avgSpd.toFixed(1) + " km/h" : "—"}</div>
+    <div class="summary-pill">Speed max ${maxSpd > 0 ? maxSpd.toFixed(1) + " km/h" : "—"}</div>
   `;
 
   const ordered = Object.entries(counts).sort((a, b) => b[1] - a[1]);
@@ -501,21 +564,25 @@ function updateLiveStatsBar(data, liveResult) {
   bar.style.display = running ? "" : "none";
   if (!running) return;
 
-  const spd = data.speed_summary?.avg_kmh ?? 0;
+  const avgSpd = data.speed_summary?.avg_kmh ?? 0;
+  const maxSpd = data.speed_summary?.max_kmh ?? 0;
   const cong = (data.congestion_summary?.level || "low").toLowerCase();
   const vehicles = liveResult.total_vehicles ?? 0;
-  const cameras  = liveResult.camera_count ?? 0;
-  const cycle    = data.cycle_count ?? 0;
+  const cameras = liveResult.camera_count ?? 0;
+  const cycle = data.cycle_count ?? 0;
 
   const vehicleEl = document.getElementById("live-stat-vehicles");
-  const speedEl   = document.getElementById("live-stat-speed");
-  const congEl    = document.getElementById("live-stat-congestion");
-  const camEl     = document.getElementById("live-stat-cameras");
-  const cycleEl   = document.getElementById("live-stat-cycle");
+  const speedEl = document.getElementById("live-stat-speed");
+  const congEl = document.getElementById("live-stat-congestion");
+  const camEl = document.getElementById("live-stat-cameras");
+  const cycleEl = document.getElementById("live-stat-cycle");
 
   if (vehicleEl) vehicleEl.innerHTML = `<i class="ti ti-car" style="margin-right:4px;"></i>${vehicles} xe`;
   if (speedEl) {
-    speedEl.innerHTML = `<i class="ti ti-gauge" style="margin-right:4px;"></i>${spd > 0 ? spd.toFixed(1) + " km/h" : "— km/h"}`;
+    const speedLabel = maxSpd > 0
+      ? `${avgSpd > 0 ? avgSpd.toFixed(0) : "—"} / ${maxSpd.toFixed(0)} km/h`
+      : (avgSpd > 0 ? `${avgSpd.toFixed(1)} km/h` : "— km/h");
+    speedEl.innerHTML = `<i class="ti ti-gauge" style="margin-right:4px;"></i>${speedLabel}`;
   }
   if (congEl) {
     const congColors = { low: "b-green", moderate: "b-amber", high: "b-red" };
@@ -530,5 +597,5 @@ function updateLiveStatsBar(data, liveResult) {
 
 function resetDownloads() {
   elements.downloadPrimary.style.display = "none";
-  elements.downloadJson.style.display    = "none";
+  elements.downloadJson.style.display = "none";
 }

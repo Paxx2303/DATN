@@ -1,0 +1,28 @@
+{
+  "result_id": "9d7e47dbc8e641cd9d7c23053247c80f",
+  "filename": "camera1_A_118.png",
+  "summary": {
+    "counts": {},
+    "total": 0,
+    "avg_speed": 0.0,
+    "duration_s": 0.419,
+    "model_key": "traffic",
+    "original_size": [
+      1245,
+      1088
+    ]
+  },
+  "artifacts": {
+    "annotated": "annotated.jpg",
+    "preprocessed": "preprocessed.jpg"
+  },
+  "preprocessing": {
+    "enabled": true,
+    "strength": 0.6,
+    "radius": 0.85,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5
+  },
+  "detections": []
+}

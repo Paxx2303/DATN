@@ -58,8 +58,8 @@ class SpeedEstimator:
         
         self._tracks[track_id].append((frame_idx, cx, cy))
         
-        # Tính speed nếu có đủ lịch sử (>= 3 điểm)
-        if len(self._tracks[track_id]) >= 3:
+        # Tính speed khi có ít nhất 2 mẫu (live snapshot cần phản hồi nhanh)
+        if len(self._tracks[track_id]) >= 2:
             self._speeds[track_id] = self._compute_speed(track_id)
     
     def _compute_speed(self, track_id: int) -> float:
@@ -103,6 +103,13 @@ class SpeedEstimator:
         if not active_speeds:
             return 0.0
         return round(sum(active_speeds) / len(active_speeds), 1)
+
+    def get_max_speed(self) -> float:
+        """Tốc độ cao nhất trong các track đang hoạt động."""
+        active_speeds = [s for s in self._speeds.values() if s > 0]
+        if not active_speeds:
+            return 0.0
+        return round(max(active_speeds), 1)
     
     def get_all_speeds(self) -> dict[int, float]:
         """Trả về dict {track_id: speed_kmh} cho tất cả."""

@@ -1,0 +1,17 @@
+{
+  "result_id": "1ef970a5dce14e1fb98d4aad1c9e3555",
+  "summary": {
+    "class_counts": {
+      "Pedestrian": 1
+    },
+    "total_objects": 1,
+    "inference_ms": 648,
+    "camera_count": 1,
+    "counts": {
+      "Pedestrian": 1
+    }
+  },
+  "artifacts": {
+    "overview_annotated": "overview_annotated.jpg"
+  }
+}

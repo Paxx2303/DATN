@@ -22,6 +22,104 @@ def generate_result_id() -> str:
     return uuid.uuid4().hex   # 32-char hex string
 
 
+def safe_upload_filename(original: str, fallback: str = "upload") -> str:
+    """Sanitize upload name while preserving the original extension when possible."""
+    from werkzeug.utils import secure_filename
+
+    safe = secure_filename(original)
+    if not safe:
+        safe = fallback
+
+    orig_ext = Path(original).suffix.lower()
+    safe_ext = Path(safe).suffix.lower()
+    if orig_ext and not safe_ext:
+        safe = f"{safe}{orig_ext}"
+    return safe
+
+
+def classify_upload_file(file_storage, filename: str) -> tuple[bool, bool]:
+    """Return (is_image, is_video) using extension and MIME type fallback."""
+    is_image = allowed_media_file(filename, "image")
+    is_video = allowed_media_file(filename, "video")
+
+    if not is_image and not is_video:
+        ctype = (getattr(file_storage, "content_type", None) or "").lower()
+        if ctype.startswith("image/"):
+            is_image = True
+        elif ctype.startswith("video/"):
+            is_video = True
+
+    return is_image, is_video
+
+
+def resolve_fisheye_enabled(
+    apply_raw: Optional[str],
+    source_layout: str = "normal",
+    *,
+    auto_apply_for_normal: bool = False,
+) -> bool:
+    """
+    Resolve whether fisheye preprocessing should run.
+
+    - explicit true/false always wins
+    - auto / missing:
+        upload detect  → apply when source_layout is normal (if auto_apply_for_normal)
+        live/external  → keep raw frames unless user forces enabled
+    """
+    if apply_raw is not None:
+        val = str(apply_raw).strip().lower()
+        if val in ("true", "1", "yes", "on"):
+            return True
+        if val in ("false", "0", "no", "off"):
+            return False
+
+    if auto_apply_for_normal:
+        return source_layout == "normal"
+    return False
+
+
+def normalize_bbox(
+    bbox: list,
+    img_width: int,
+    img_height: int,
+) -> Optional[tuple[int, int, int, int]]:
+    """Clamp bbox to image bounds and reject degenerate / needle-thin boxes."""
+    if not bbox or len(bbox) < 4:
+        return None
+
+    raw = [float(v) for v in bbox[:4]]
+
+    # Handle accidental normalized coordinates from upstream APIs.
+    if img_width > 1 and img_height > 1 and all(0.0 <= v <= 1.0 for v in raw):
+        if max(raw) <= 1.0:
+            raw = [
+                raw[0] * img_width,
+                raw[1] * img_height,
+                raw[2] * img_width,
+                raw[3] * img_height,
+            ]
+
+    x1 = max(0, min(int(round(raw[0])), img_width - 1))
+    y1 = max(0, min(int(round(raw[1])), img_height - 1))
+    x2 = max(0, min(int(round(raw[2])), img_width - 1))
+    y2 = max(0, min(int(round(raw[3])), img_height - 1))
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    width = x2 - x1
+    height = y2 - y1
+    min_side = max(8, min(img_width, img_height) // 100)
+    if width < min_side or height < min_side:
+        return None
+
+    aspect = width / max(height, 1)
+    if aspect > 8.0 or aspect < 0.125:
+        return None
+
+    return x1, y1, x2, y2
+
+
 def read_uploaded_image(file_storage) -> Optional[Image.Image]:
     """
     Đọc ảnh từ Flask FileStorage object.
@@ -35,7 +133,10 @@ def read_uploaded_image(file_storage) -> Optional[Image.Image]:
     PIL Image (RGB) hoặc None nếu lỗi
     """
     try:
-        img = Image.open(file_storage.stream).convert("RGB")
+        stream = file_storage.stream
+        stream.seek(0)
+        img = Image.open(stream).convert("RGB")
+        stream.seek(0)
         return img
     except Exception as e:
         logger.error(f"Cannot read uploaded image: {e}")
@@ -82,19 +183,27 @@ def draw_detections_on_image(
     image: Image.Image,
     detections: list[dict],
     name_map: Optional[dict] = None,
+    speed_data: Optional[dict] = None,
 ) -> Image.Image:
     """
     Vẽ bounding boxes và labels lên ảnh PIL.
     Dùng cho image inference (không phải video).
+    
+    Parameters
+    ----------
+    speed_data : dict[int, float]
+        Mapping từ detection index → speed (km/h)
     
     Returns ảnh PIL mới đã annotated.
     """
     import cv2
     
     name_map = name_map or {}
+    speed_data = speed_data or {}
     
     # PIL → OpenCV BGR
     img_array = np.array(image)[..., ::-1].copy()
+    img_height, img_width = img_array.shape[:2]
     
     COLOR_MAP = {
         "Car":        (0, 255, 0),
@@ -105,22 +214,61 @@ def draw_detections_on_image(
         "Bicycle":    (0, 255, 255),
     }
     
-    for det in detections:
+    for idx, det in enumerate(detections):
         label = det.get("class_name", "unknown")
         conf  = det.get("confidence", 0.0)
-        x1, y1, x2, y2 = det.get("bbox", [0, 0, 0, 0])
-        
+        coords = normalize_bbox(det.get("bbox", [0, 0, 0, 0]), img_width, img_height)
+        if coords is None:
+            continue
+        x1, y1, x2, y2 = coords
+
         color = COLOR_MAP.get(label, (200, 200, 200))
         
         # Bounding box
         cv2.rectangle(img_array, (x1, y1), (x2, y2), color, 2)
         
-        # Label text
         text = f"{label} {conf:.2f}"
-        (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-        cv2.rectangle(img_array, (x1, y1-th-8), (x1+tw+6, y1), color, -1)
-        cv2.putText(img_array, text, (x1+3, y1-4),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        speed = speed_data.get(idx)
+        if speed is None or speed <= 0:
+            speed = det.get("speed_kmh", 0.0)
+        has_speed = speed is not None and speed > 0
+
+        font_scale = 0.5
+        font_thickness = 1
+        (tw, th), baseline = cv2.getTextSize(
+            text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness,
+        )
+
+        text_y = max(y1 - 5, th + 5)
+        cv2.rectangle(
+            img_array,
+            (x1, text_y - th - baseline),
+            (x1 + tw + 6, text_y + baseline),
+            color, -1,
+        )
+        cv2.putText(
+            img_array, text, (x1 + 3, text_y - baseline),
+            cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness,
+        )
+
+        if has_speed:
+            speed_text = f"{speed:.0f} km/h"
+            speed_scale = 0.62
+            (sw, sh), sbase = cv2.getTextSize(
+                speed_text, cv2.FONT_HERSHEY_SIMPLEX, speed_scale, 2,
+            )
+            speed_y = min(y2 + sh + 10, img_height - 4)
+            speed_bg = (20, 120, 255)  # highlighted orange (BGR)
+            cv2.rectangle(
+                img_array,
+                (x1, speed_y - sh - sbase - 4),
+                (x1 + sw + 10, speed_y + 4),
+                speed_bg, -1,
+            )
+            cv2.putText(
+                img_array, speed_text, (x1 + 5, speed_y - sbase),
+                cv2.FONT_HERSHEY_SIMPLEX, speed_scale, (255, 255, 255), 2,
+            )
     
     # OpenCV BGR → PIL RGB
     result = Image.fromarray(img_array[..., ::-1])
@@ -142,7 +290,7 @@ def allowed_media_file(filename: str, media_type: str = "both") -> bool:
     ----------
     media_type : "image" | "video" | "both"
     """
-    IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff"}
+    IMAGE_EXTS = {".jpg", ".jpeg", ".jfif", ".png", ".bmp", ".webp", ".tiff"}
     VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv"}
     
     ext = Path(filename).suffix.lower()

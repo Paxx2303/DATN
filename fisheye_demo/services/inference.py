@@ -10,6 +10,7 @@ from PIL import Image
 from typing import Any, Optional
 from services.model_registry import load_model
 from config import Config
+from utils.helpers import normalize_bbox
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +65,14 @@ def run_inference(
                 continue
             
             conf_val = float(box.conf.item())
-            x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
-            
+            raw_bbox = [float(v) for v in box.xyxy[0].tolist()]
+            coords = normalize_bbox(raw_bbox, image.width, image.height)
+            if coords is None:
+                continue
+            x1, y1, x2, y2 = coords
+
             display_name = Config.VEHICLE_NAME_MAP.get(cls_name, cls_name)
-            
+
             detections.append({
                 "class_name":  display_name,
                 "class_raw":   cls_name,

@@ -12,6 +12,9 @@ class AppState {
     this.liveStreamAttached = false;
     this.lastLiveCycleCount = null;
     this.lastLiveUpdatedAt = null;
+    this.liveIntervalSeconds = 0.5;
+    this.liveCycleDurationMs = null;
+    this.livePollMs = null;
 
     // Listeners for state changes
     this.listeners = {};

@@ -11,6 +11,13 @@ export function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+export function resolveApplyFisheye(fisheyeEnabled, sourceLayout, { forLive = false } = {}) {
+  if (fisheyeEnabled === "true") return "true";
+  if (fisheyeEnabled === "false") return "false";
+  if (forLive) return "false";
+  return sourceLayout === "normal" ? "true" : "false";
+}
+
 export function normalizeExternalCameraUrl(value) {
   const rawValue = String(value || "").trim();
   if (!rawValue) {

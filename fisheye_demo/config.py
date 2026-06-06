@@ -35,11 +35,11 @@ class Config:
     DATABASE_URL      = os.getenv("DATABASE_URL", "")  # postgresql://...
 
     # ── YOLO Model ───────────────────────────────────────────
-    DEFAULT_MODEL_KEY = os.getenv("DEFAULT_MODEL", "best")
+    DEFAULT_MODEL_KEY = os.getenv("DEFAULT_MODEL", "traffic")
     AVAILABLE_MODELS  = {
-        "best":  str(MODEL_FOLDER / "yolo11_fisheye_v5_best.pt"),
-        "nano":  str(MODEL_FOLDER / "yolo11n.pt"),
-        "small": str(MODEL_FOLDER / "traffic.pt"),
+        "traffic": str(MODEL_FOLDER / "traffic.pt"),
+        "nano":    str(MODEL_FOLDER / "yolo11n.pt"),
+        "best":    str(MODEL_FOLDER / "yolo11_fisheye_v5_best.pt"),
     }
     DEFAULT_CONF      = float(os.getenv("YOLO_CONF", "0.35"))
     DEFAULT_IOU       = float(os.getenv("YOLO_IOU", "0.45"))
@@ -56,7 +56,10 @@ class Config:
 
     # ── External Camera Polling ──────────────────────────────
     EXT_CAM_SOURCE_URL = os.getenv("EXT_CAM_SOURCE_URL", "https://camera.0511.vn/camera.html")
-    EXT_CAM_INTERVAL   = float(os.getenv("EXT_CAM_INTERVAL", "10.0"))  # seconds
+    EXT_CAM_INTERVAL   = float(
+        os.getenv("EXT_CAM_INTERVAL")
+        or os.getenv("FISHEYE_EXTERNAL_CAMERA_LIVE_INTERVAL", "0.5")
+    )  # seconds
     EXT_CAM_LIMIT      = int(os.getenv("EXT_CAM_LIMIT", "6"))
     EXT_CAM_LIMIT_GPU  = int(os.getenv("EXT_CAM_LIMIT_GPU", "4"))   # cameras in parallel (GPU)
     EXT_CAM_LIMIT_CPU  = int(os.getenv("EXT_CAM_LIMIT_CPU", "1"))   # cameras sequential (CPU)

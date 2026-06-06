@@ -1,0 +1,75 @@
+{
+  "result_id": "9b96c3060b8d45c7a6ab70e25e45a527",
+  "filename": "pexels-kseniya-buraya-124360874-9991461.jpg",
+  "summary": {
+    "counts": {
+      "Pedestrian": 3
+    },
+    "total": 3,
+    "avg_speed": 0.0,
+    "duration_s": 0.465,
+    "model_key": "traffic",
+    "original_size": [
+      1785,
+      2692
+    ]
+  },
+  "artifacts": {
+    "annotated": "annotated.jpg"
+  },
+  "preprocessing": {
+    "enabled": false,
+    "strength": 0.93,
+    "radius": 0.85,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5
+  },
+  "detections": [
+    {
+      "class_name": "Pedestrian",
+      "class_raw": "person",
+      "confidence": 0.854,
+      "bbox": [
+        0,
+        0,
+        194,
+        2692
+      ],
+      "center": [
+        97,
+        1346
+      ]
+    },
+    {
+      "class_name": "Pedestrian",
+      "class_raw": "person",
+      "confidence": 0.514,
+      "bbox": [
+        686,
+        89,
+        932,
+        2463
+      ],
+      "center": [
+        809,
+        1276
+      ]
+    },
+    {
+      "class_name": "Pedestrian",
+      "class_raw": "person",
+      "confidence": 0.392,
+      "bbox": [
+        803,
+        45,
+        1071,
+        2343
+      ],
+      "center": [
+        937,
+        1194
+      ]
+    }
+  ]
+}

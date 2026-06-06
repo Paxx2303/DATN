@@ -193,8 +193,8 @@
                   <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
                     for="source-layout">Input layout</label>
                   <select id="source-layout">
+                    <option value="normal" selected>Normal traffic view</option>
                     <option value="fisheye">Already fisheye</option>
-                    <option value="normal">Normal traffic view</option>
                   </select>
                 </div>
                 <div>
@@ -341,19 +341,8 @@
                     <option value="gpu">GPU — 4 cams (parallel)</option>
                   </select>
                 </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                  <div>
-                    <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
-                      for="external-camera-live-interval">Server cycle (s)</label>
-                    <input id="external-camera-live-interval" type="number" min="0.1" max="120" step="0.1"
-                      value="{{ "%.1f"|format(external_camera_live_interval_seconds) }}">
-                  </div>
-                  <div>
-                    <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
-                      for="external-camera-live-ui-fps">UI refresh (fps)</label>
-                    <input id="external-camera-live-ui-fps" type="number" min="1" max="60" step="1" value="15">
-                  </div>
-                </div>
+                <input id="external-camera-live-interval" type="hidden"
+                  value="{{ "%.1f"|format(external_camera_live_interval_seconds) }}">
               </div>
 
               <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">

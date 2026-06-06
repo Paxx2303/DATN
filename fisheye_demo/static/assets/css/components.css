@@ -127,7 +127,10 @@
 }
 
 @media (max-width: 768px) {
-  .grid2, .grid3, .grid4 {
+
+  .grid2,
+  .grid3,
+  .grid4 {
     grid-template-columns: 1fr;
     gap: 12px;
   }
@@ -506,8 +509,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
 /* Live Camera styling */
 .external-result-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
   margin-top: 14px;
 }
 
@@ -521,24 +524,25 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .external-result-item img {
   width: 100%;
-  height: 120px;
+  height: 240px;
   object-fit: cover;
 }
 
 .external-result-copy {
-  padding: 8px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .external-result-copy strong {
   color: var(--color-text-primary);
+  font-size: 12px;
 }
 
 .external-result-copy span {
   color: var(--color-text-tertiary);
-  font-size: 9.5px;
+  font-size: 10.5px;
 }
 
 .camera-live-status {
@@ -678,18 +682,26 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-left: 3px solid var(--color-text-success);
   transition: border-color 0.3s, background 0.3s;
 }
+
 .congestion-bar.cong-moderate {
   border-left-color: var(--color-text-warning);
   background: rgba(255, 209, 102, 0.04);
 }
+
 .congestion-bar.cong-high {
   border-left-color: var(--color-text-danger);
   background: rgba(255, 80, 80, 0.07);
   animation: cong-pulse 1.6s infinite alternate;
 }
+
 @keyframes cong-pulse {
-  from { box-shadow: 0 0 0 0 rgba(255,80,80,0); }
-  to   { box-shadow: 0 0 12px 2px rgba(255,80,80,0.18); }
+  from {
+    box-shadow: 0 0 0 0 rgba(255, 80, 80, 0);
+  }
+
+  to {
+    box-shadow: 0 0 12px 2px rgba(255, 80, 80, 0.18);
+  }
 }
 
 .cong-row {
@@ -698,6 +710,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 6px;
   margin-top: 6px;
 }
+
 .cong-cam {
   background: var(--color-background-secondary);
   border: 0.5px solid var(--color-border-tertiary);
@@ -709,10 +722,26 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 1px;
   min-width: 110px;
 }
-.cong-cam.cong-high  { border-color: var(--color-text-danger);  background: rgba(255,80,80,.06); }
-.cong-cam.cong-moderate { border-color: var(--color-text-warning); background: rgba(255,209,102,.05); }
-.cong-cam-name  { color: var(--color-text-primary); font-weight: 600; }
-.cong-cam-stats { color: var(--color-text-tertiary); font-size: 9.5px; }
+
+.cong-cam.cong-high {
+  border-color: var(--color-text-danger);
+  background: rgba(255, 80, 80, .06);
+}
+
+.cong-cam.cong-moderate {
+  border-color: var(--color-text-warning);
+  background: rgba(255, 209, 102, .05);
+}
+
+.cong-cam-name {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.cong-cam-stats {
+  color: var(--color-text-tertiary);
+  font-size: 9.5px;
+}
 
 /* ── Alert feed ───────────────────────────────────────────── */
 .alert-feed {
@@ -722,6 +751,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   max-height: 440px;
   overflow-y: auto;
 }
+
 .alert-item {
   background: rgba(255, 80, 80, 0.06);
   border: 0.5px solid rgba(255, 80, 80, 0.25);
@@ -732,16 +762,39 @@ input[type="range"]::-webkit-slider-thumb:hover {
   flex-direction: column;
   gap: 2px;
 }
-.alert-item.cong  { border-color: rgba(255, 130, 50, 0.35); background: rgba(255,130,50,.06); }
-.alert-item-title { color: var(--color-text-danger); font-weight: 600; font-size: 10px; text-transform: uppercase; }
-.alert-item.cong .alert-item-title { color: var(--color-text-warning); }
-.alert-item-msg   { color: var(--color-text-secondary); line-height: 1.35; }
-.alert-item-time  { color: var(--color-text-tertiary); font-size: 9px; margin-top: 1px; }
+
+.alert-item.cong {
+  border-color: rgba(255, 130, 50, 0.35);
+  background: rgba(255, 130, 50, .06);
+}
+
+.alert-item-title {
+  color: var(--color-text-danger);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.alert-item.cong .alert-item-title {
+  color: var(--color-text-warning);
+}
+
+.alert-item-msg {
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
+.alert-item-time {
+  color: var(--color-text-tertiary);
+  font-size: 9px;
+  margin-top: 1px;
+}
 
 /* ── Speed badge overlay on camera items ─────────────────── */
 .external-result-item {
   position: relative;
 }
+
 .cam-speed-badge {
   position: absolute;
   top: 5px;
@@ -761,6 +814,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   align-items: flex-end;
   gap: 1px;
 }
+
 .cam-cong-badge {
   position: absolute;
   bottom: 36px;
@@ -773,9 +827,25 @@ input[type="range"]::-webkit-slider-thumb:hover {
   pointer-events: none;
   text-transform: uppercase;
 }
-.cam-cong-badge.low      { background: rgba(55,200,95,.18);  color: var(--color-text-success); border: 0.5px solid rgba(55,200,95,.4); }
-.cam-cong-badge.moderate { background: rgba(255,200,55,.18); color: var(--color-text-warning); border: 0.5px solid rgba(255,200,55,.4); }
-.cam-cong-badge.high     { background: rgba(255,70,70,.22);  color: var(--color-text-danger);  border: 0.5px solid rgba(255,70,70,.5);  animation: cong-pulse 1.4s infinite alternate; }
+
+.cam-cong-badge.low {
+  background: rgba(55, 200, 95, .18);
+  color: var(--color-text-success);
+  border: 0.5px solid rgba(55, 200, 95, .4);
+}
+
+.cam-cong-badge.moderate {
+  background: rgba(255, 200, 55, .18);
+  color: var(--color-text-warning);
+  border: 0.5px solid rgba(255, 200, 55, .4);
+}
+
+.cam-cong-badge.high {
+  background: rgba(255, 70, 70, .22);
+  color: var(--color-text-danger);
+  border: 0.5px solid rgba(255, 70, 70, .5);
+  animation: cong-pulse 1.4s infinite alternate;
+}
 
 /* ── Example image strip ─────────────────────────────────── */
 .example-strip {
@@ -784,6 +854,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   flex-wrap: wrap;
   margin-top: 4px;
 }
+
 .example-card {
   cursor: pointer;
   border: 0.5px solid var(--color-border-tertiary);
@@ -794,17 +865,20 @@ input[type="range"]::-webkit-slider-thumb:hover {
   width: 88px;
   flex-shrink: 0;
 }
+
 .example-card:hover {
   border-color: var(--color-text-info);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(85, 214, 255, 0.15);
 }
+
 .example-card img {
   width: 88px;
   height: 56px;
   object-fit: cover;
   display: block;
 }
+
 .example-card-label {
   font-size: 9px;
   font-weight: 600;

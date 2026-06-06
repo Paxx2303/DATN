@@ -45,24 +45,30 @@ class _CentroidTracker:
         self._next_id = 0
         self._centroids: dict[int, tuple] = {}  # id → (cx, cy)
 
-    def update(self, detections: list[dict]) -> dict[int, tuple]:
+    def update(self, detections: list[dict]) -> tuple[dict[int, tuple], dict[int, int]]:
         """
         Match new detections to existing tracks.
-        Returns {track_id: (cx, cy)} for the current frame.
+
+        Returns
+        -------
+        tracks : {track_id: (cx, cy)}
+        det_assignments : {detection_index: track_id}
         """
         new_pts = [tuple(d["center"]) for d in detections if "center" in d]
 
         if not self._centroids:
             result: dict[int, tuple] = {}
-            for cx, cy in new_pts:
+            assignments: dict[int, int] = {}
+            for det_idx, (cx, cy) in enumerate(new_pts):
                 self._centroids[self._next_id] = (cx, cy)
                 result[self._next_id] = (cx, cy)
+                assignments[det_idx] = self._next_id
                 self._next_id += 1
-            return result
+            return result, assignments
 
         if not new_pts:
             self._centroids.clear()
-            return {}
+            return {}, {}
 
         matched_new: dict[int, int] = {}  # new_idx → existing track_id
         used_ids: set[int] = set()
@@ -80,7 +86,8 @@ class _CentroidTracker:
                 used_ids.add(best_id)
 
         new_centroids: dict[int, tuple] = {}
-        result = {}
+        result: dict[int, tuple] = {}
+        assignments: dict[int, int] = {}
         for new_idx, (nx, ny) in enumerate(new_pts):
             tid = matched_new.get(new_idx)
             if tid is None:
@@ -88,9 +95,10 @@ class _CentroidTracker:
                 self._next_id += 1
             new_centroids[tid] = (nx, ny)
             result[tid] = (nx, ny)
+            assignments[new_idx] = tid
 
         self._centroids = new_centroids
-        return result
+        return result, assignments
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -172,6 +180,7 @@ class ExternalCameraLiveMonitor:
                 "source_url":     resolved_url,
                 "stream_url":     stream_url,
                 "camera_limit":   resolved_limit,
+                "source_layout":  (preprocessing or {}).get("source_layout", "normal"),
                 "preprocessing":  preprocessing or {},
                 "conf":           conf_threshold or Config.DEFAULT_CONF,
                 "iou":            iou_threshold  or Config.DEFAULT_IOU,
@@ -331,22 +340,27 @@ class ExternalCameraLiveMonitor:
                     # Centroid tracking → stable track IDs
                     if cam_key not in self._camera_trackers:
                         self._camera_trackers[cam_key] = _CentroidTracker()
-                    tracked = self._camera_trackers[cam_key].update(dets)
+                    tracked, det_assignments = self._camera_trackers[cam_key].update(dets)
 
                     # Speed estimation
                     if cam_key not in self._camera_speed_estimators:
-                        fps_equiv = 1.0 / max(interval_s, 1.0)
+                        fps_equiv = 1.0 / max(interval_s, 0.5)
                         self._camera_speed_estimators[cam_key] = SpeedEstimator(
                             fps=fps_equiv,
                             scale_factor=Config.SPEED_SCALE_FACTOR,
                         )
                     speed_est = self._camera_speed_estimators[cam_key]
+                    track_speeds: dict[int, float] = {}
                     for tid, (cx, cy) in tracked.items():
                         speed_est.update(
                             track_id=tid, cx=cx, cy=cy,
                             frame_idx=self._cycle_count,
                         )
+                        track_speed = speed_est.get_speed(tid)
+                        if track_speed > 0:
+                            track_speeds[tid] = track_speed
                     avg_speed = speed_est.get_average_speed()
+                    max_speed = speed_est.get_max_speed()
 
                     # Congestion detection
                     if cam_key not in self._camera_congestion_detectors:
@@ -355,15 +369,31 @@ class ExternalCameraLiveMonitor:
                     congestion = self._camera_congestion_detectors[cam_key].analyze(boxes)
                     self._camera_congestion[cam_key] = congestion
 
-                    # Annotate frame
-                    annotated = draw_detections_on_image(entry.snapshot, dets)
+                    detection_speeds: dict[int, float] = {}
+                    detections_with_speed: list[dict] = []
+                    for det_idx, det in enumerate(dets):
+                        det_copy = dict(det)
+                        tid = det_assignments.get(det_idx)
+                        speed_kmh = track_speeds.get(tid, 0.0) if tid is not None else 0.0
+                        if speed_kmh > 0:
+                            detection_speeds[det_idx] = speed_kmh
+                            det_copy["speed_kmh"] = speed_kmh
+                        detections_with_speed.append(det_copy)
+
+                    # Annotate frame with per-vehicle speed labels
+                    annotated = draw_detections_on_image(
+                        entry.snapshot, detections_with_speed, speed_data=detection_speeds,
+                    )
                     entry.snapshot = annotated
                     self._stream_frames[f"camera_{entry.camera_index}"] = \
                         _pil_to_jpeg_bytes(annotated)
 
                     # Collage label: "CamName | 12v | H | 45km/h"
                     cong_initial = congestion["level"][0].upper()
-                    label = f"{entry.name}|{count}v|{cong_initial}|{avg_speed:.0f}k"
+                    speed_label = f"{max_speed:.0f}k" if max_speed > 0 else (
+                        f"{avg_speed:.0f}k" if avg_speed > 0 else "—k"
+                    )
+                    label = f"{entry.name}|{count}v|{cong_initial}|{speed_label}"
                     camera_labels[entry.camera_index] = label
 
                     # ── Alerts ──────────────────────────────────────
@@ -382,8 +412,16 @@ class ExternalCameraLiveMonitor:
                         "index":         entry.camera_index,
                         "count":         count,
                         "avg_speed_kmh": avg_speed,
+                        "max_speed_kmh": max_speed,
+                        "vehicle_speeds": [
+                            {
+                                "class_name": d.get("class_name", "unknown"),
+                                "speed_kmh":  d.get("speed_kmh", 0.0),
+                            }
+                            for d in detections_with_speed
+                            if d.get("speed_kmh", 0.0) > 0
+                        ],
                         "congestion":    congestion,
-                        # URL for snapshot-mode display (no base64 overhead)
                         "annotated":     f"/api/external-camera/snapshot/{entry.camera_index}",
                         "title":         cam_key,
                         "total_objects": count,
@@ -408,6 +446,7 @@ class ExternalCameraLiveMonitor:
 
                 # ── Step 7: Summarise results ─────────────────────────────
                 speeds      = [c["avg_speed_kmh"] for c in cameras_info if c["avg_speed_kmh"] > 0]
+                max_speeds  = [c["max_speed_kmh"] for c in cameras_info if c["max_speed_kmh"] > 0]
                 cong_levels = [c["congestion"]["level"] for c in cameras_info]
                 cong_scores = [c["congestion"]["score"] for c in cameras_info]
                 worst_cong  = ("high"     if "high"     in cong_levels else
@@ -427,12 +466,14 @@ class ExternalCameraLiveMonitor:
                         "inference_ms":  round(elapsed_ms, 0),
                         "camera_count":  len(cameras_info),
                     },
-                    "preprocessing": {"enabled": bool(cfg["preprocessing"].get("enabled")),
-                                      "source_layout": "fisheye" if cfg["preprocessing"].get("enabled") else "normal"},
+                    "preprocessing": {
+                        "enabled": bool(cfg["preprocessing"].get("enabled")),
+                        "source_layout": cfg.get("source_layout", "normal"),
+                    },
                     "model": {"loaded_from_name": cfg.get("model_key", "best")},
                     "speed_summary": {
                         "avg_kmh": round(sum(speeds) / len(speeds), 1) if speeds else 0.0,
-                        "max_kmh": max(speeds, default=0.0),
+                        "max_kmh": max(max_speeds, default=0.0),
                     },
                     "congestion_summary": {
                         "level":     worst_cong,

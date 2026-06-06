@@ -1,0 +1,19 @@
+{
+  "result_id": "24ddf1dd9348489898d9ded769d04e42",
+  "summary": {
+    "class_counts": {
+      "Car": 6,
+      "Truck": 1
+    },
+    "total_objects": 7,
+    "inference_ms": 5764,
+    "camera_count": 1,
+    "counts": {
+      "Car": 6,
+      "Truck": 1
+    }
+  },
+  "artifacts": {
+    "overview_annotated": "overview_annotated.jpg"
+  }
+}

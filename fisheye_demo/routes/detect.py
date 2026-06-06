@@ -12,13 +12,11 @@ import json
 import logging
 from pathlib import Path
 from flask import Blueprint, request, jsonify, current_app
-from werkzeug.utils import secure_filename
-
 from config import Config
 from utils.helpers import (
     generate_result_id, read_uploaded_image, apply_preprocessing,
     pil_to_base64, draw_detections_on_image, ensure_result_dir,
-    allowed_media_file,
+    safe_upload_filename, classify_upload_file, resolve_fisheye_enabled,
 )
 from services.inference import run_inference
 from services.model_registry import load_model
@@ -69,20 +67,24 @@ def detect():
     iou       = float(request.form.get("iou", Config.DEFAULT_IOU))
     device    = request.form.get("device", Config.DEFAULT_DEVICE)
     
-    fisheye_raw      = request.form.get("fisheye") or request.form.get("apply_fisheye", "false")
-    fisheye_enabled  = fisheye_raw.lower() == "true"
+    source_layout    = request.form.get("source_layout", "normal")
+    fisheye_raw      = request.form.get("fisheye") or request.form.get("apply_fisheye")
+    fisheye_enabled  = resolve_fisheye_enabled(
+        fisheye_raw, source_layout, auto_apply_for_normal=True,
+    )
     fisheye_strength = float(request.form.get("fisheye_strength", Config.FISHEYE_STRENGTH))
     fisheye_radius   = float(request.form.get("fisheye_radius", Config.FISHEYE_RADIUS))
     fisheye_effect   = request.form.get("fisheye_effect", Config.FISHEYE_EFFECT)
     fisheye_cx       = float(request.form.get("fisheye_cx", 0.5))
     fisheye_cy       = float(request.form.get("fisheye_cy", 0.5))
-    
-    filename = secure_filename(file.filename)
-    
-    # ── Xác định loại media ───────────────────────────────────
-    is_video = allowed_media_file(filename, "video")
-    is_image = allowed_media_file(filename, "image")
-    
+
+    filename = safe_upload_filename(file.filename)
+    logger.info(
+        "Uploaded file: %s -> %s, mimetype: %s",
+        file.filename, filename, file.content_type,
+    )
+
+    is_image, is_video = classify_upload_file(file, filename)
     if not is_video and not is_image:
         return jsonify({"error": f"Unsupported file type: {filename}"}), 400
     
@@ -546,9 +548,8 @@ def convert():
     if not file.filename:
         return jsonify({"error": "Empty filename"}), 400
 
-    filename = secure_filename(file.filename)
-    is_image = allowed_media_file(filename, "image")
-    is_video = allowed_media_file(filename, "video")
+    filename = safe_upload_filename(file.filename)
+    is_image, is_video = classify_upload_file(file, filename)
 
     if not is_image and not is_video:
         return jsonify({"error": f"Unsupported file type: {filename}"}), 400

@@ -1,0 +1,183 @@
+{
+  "result_id": "594d89fc32294465a3231bb8da17d7df",
+  "filename": "download_2.jfif",
+  "summary": {
+    "counts": {
+      "Car": 4,
+      "Pedestrian": 5,
+      "Truck": 1
+    },
+    "total": 10,
+    "avg_speed": 0.0,
+    "duration_s": 9.217,
+    "model_key": "traffic",
+    "original_size": [
+      193,
+      148
+    ]
+  },
+  "artifacts": {
+    "annotated": "annotated.jpg",
+    "preprocessed": "preprocessed.jpg"
+  },
+  "preprocessing": {
+    "enabled": true,
+    "strength": 0.9,
+    "radius": 1.0,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5
+  },
+  "detections": [
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.796,
+      "bbox": [
+        119,
+        53,
+        173,
+        100
+      ],
+      "center": [
+        146,
+        76
+      ]
+    },
+    {
+      "class_name": "Pedestrian",
+      "class_raw": "person",
+      "confidence": 0.769,
+      "bbox": [
+        73,
+        65,
+        92,
+        113
+      ],
+      "center": [
+        82,
+        89
+      ]
+    },
+    {
+      "class_name": "Pedestrian",
+      "class_raw": "person",
+      "confidence": 0.639,
+      "bbox": [
+        149,
+        24,
+        159,
+        48
+      ],
+      "center": [
+        154,
+        36
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.575,
+      "bbox": [
+        89,
+        25,
+        141,
+        54
+      ],
+      "center": [
+        115,
+        39
+      ]
+    },
+    {
+      "class_name": "Pedestrian",
+      "class_raw": "person",
+      "confidence": 0.545,
+      "bbox": [
+        6,
+        56,
+        15,
+        80
+      ],
+      "center": [
+        10,
+        68
+      ]
+    },
+    {
+      "class_name": "Pedestrian",
+      "class_raw": "person",
+      "confidence": 0.481,
+      "bbox": [
+        55,
+        55,
+        68,
+        88
+      ],
+      "center": [
+        61,
+        71
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.476,
+      "bbox": [
+        59,
+        21,
+        105,
+        50
+      ],
+      "center": [
+        82,
+        35
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.474,
+      "bbox": [
+        160,
+        63,
+        185,
+        112
+      ],
+      "center": [
+        172,
+        87
+      ]
+    },
+    {
+      "class_name": "Pedestrian",
+      "class_raw": "person",
+      "confidence": 0.376,
+      "bbox": [
+        35,
+        48,
+        45,
+        79
+      ],
+      "center": [
+        40,
+        63
+      ]
+    },
+    {
+      "class_name": "Truck",
+      "class_raw": "truck",
+      "confidence": 0.372,
+      "bbox": [
+        95,
+        45,
+        131,
+        87
+      ],
+      "center": [
+        113,
+        66
+      ]
+    }
+  ]
+}

@@ -80,7 +80,7 @@ def extract_camera_entries(
         "src", "data-src", "data-original",
         "data-lazy-src", "data-url", "data-image",
     )
-    _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".gif")
+    _IMAGE_EXTS = (".jpg", ".jpeg", ".jfif", ".png", ".bmp", ".gif")
     _CAMERA_KEYWORDS = ("snap", "snapshot", "cam", "camera", "live", "view",
                         "stream", "cctv", "traffic", "webcam")
 
@@ -174,7 +174,7 @@ def extract_camera_entries(
         import re
         _URL_RE = re.compile(
             r'(?:"|\'|=)(https?://[^\s"\'<>]+?(?:'
-            r'\.jpg|\.jpeg|\.png|snapshot|snap\.cgi|live\.jpg|cam\d|camera\d|'
+            r'\.jpg|\.jpeg|\.jfif|\.png|snapshot|snap\.cgi|live\.jpg|cam\d|camera\d|'
             r'/cam/|/cctv/|/traffic/)(?:[^\s"\'<>]*)?)(?:"|\')',
             re.IGNORECASE,
         )

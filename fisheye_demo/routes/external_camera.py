@@ -92,9 +92,13 @@ def detect_external_camera():
         model_key    = request.form.get("model_key", Config.DEFAULT_MODEL_KEY)
         conf         = float(request.form.get("conf", Config.DEFAULT_CONF))
         iou          = float(request.form.get("iou", Config.DEFAULT_IOU))
+        from utils.helpers import resolve_fisheye_enabled
+
         source_layout = request.form.get("source_layout", "normal")
-        apply_fish_raw = request.form.get("apply_fisheye", "false").lower()
-        fisheye_enabled = apply_fish_raw == "true"
+        apply_fish_raw = request.form.get("apply_fisheye")
+        fisheye_enabled = resolve_fisheye_enabled(
+            apply_fish_raw, source_layout, auto_apply_for_normal=False,
+        )
         fisheye_strength = float(request.form.get("fisheye_strength", Config.FISHEYE_STRENGTH))
         fisheye_radius   = float(request.form.get("fisheye_radius",   Config.FISHEYE_RADIUS))
         fisheye_effect   = request.form.get("fisheye_effect", Config.FISHEYE_EFFECT)
@@ -258,17 +262,22 @@ def start_monitor():
     source_url = data.get("source_url") or data.get("external_camera_url", "") or Config.EXT_CAM_SOURCE_URL
     interval   = float(data.get("interval") or data.get("interval_seconds") or Config.EXT_CAM_INTERVAL)
     device     = data.get("device") or data.get("compute_mode") or Config.DEFAULT_DEVICE
-    fisheye_on = data.get("fisheye", data.get("apply_fisheye", "false"))
-    fisheye_on = str(fisheye_on).lower() in ("true", "1", "yes")
+    from utils.helpers import resolve_fisheye_enabled
 
-    fisheye_config = {}
+    source_layout = data.get("source_layout", "normal")
+    apply_raw = data.get("fisheye", data.get("apply_fisheye"))
+    fisheye_on = resolve_fisheye_enabled(
+        apply_raw, source_layout, auto_apply_for_normal=False,
+    )
+
+    fisheye_config = {"enabled": False, "source_layout": source_layout}
     if fisheye_on:
-        fisheye_config = {
+        fisheye_config.update({
             "enabled":  True,
             "strength": float(data.get("fisheye_strength", Config.FISHEYE_STRENGTH)),
             "radius":   float(data.get("fisheye_radius", Config.FISHEYE_RADIUS)),
             "effect":   data.get("fisheye_effect", Config.FISHEYE_EFFECT),
-        }
+        })
 
     status = camera_monitor.start(
         source_mode    = data.get("source_mode", "snapshot"),

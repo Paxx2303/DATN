@@ -4,6 +4,7 @@
 import { elements, setToast, setLoading, updateControlLabels } from './Layout.js';
 import { appState } from '../state/appState.js';
 import { ApiService } from '../services/api.js';
+import { resolveApplyFisheye } from '../utils/helpers.js';
 
 export function initWorkspace(classNames, classColors, onJobCompleted) {
   // Bind input element clicks and change handlers
@@ -160,27 +161,21 @@ function updateButtonsForCurrentFile() {
   }
 }
 
-function getRequestedFisheyeState() {
-  if (elements.fisheyeEnabled.value === "true") return "true";
-  if (elements.fisheyeEnabled.value === "false") return "false";
-  return "";
-}
-
 function buildFormData(fieldName) {
   const formData = new FormData();
+  const sourceLayout = elements.sourceLayout.value;
   formData.append(fieldName, appState.currentFile);
   formData.append("model_key", elements.modelKey.value);
   formData.append("conf", elements.confidence.value);
   formData.append("iou", elements.iou.value);
-  formData.append("source_layout", elements.sourceLayout.value);
+  formData.append("source_layout", sourceLayout);
   formData.append("fisheye_strength", elements.fisheyeStrength.value);
   formData.append("fisheye_radius", elements.fisheyeRadius.value);
   formData.append("fisheye_effect", elements.fisheyeEffect.value);
-  
-  const applyValue = getRequestedFisheyeState();
-  if (applyValue) {
-    formData.append("apply_fisheye", applyValue);
-  }
+  formData.append(
+    "apply_fisheye",
+    resolveApplyFisheye(elements.fisheyeEnabled.value, sourceLayout),
+  );
   
   if (appState.currentMediaType === "video") {
     const rawFps = elements.videoDetectFps.value.trim();

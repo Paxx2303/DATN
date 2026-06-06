@@ -1,0 +1,422 @@
+{
+  "result_id": "6c8807e5a6404c75b230928b0e9f8a1d",
+  "filename": "download_4.jfif",
+  "summary": {
+    "counts": {
+      "Car": 21,
+      "Truck": 5
+    },
+    "total": 26,
+    "avg_speed": 0.0,
+    "duration_s": 0.183,
+    "model_key": "traffic",
+    "original_size": [
+      300,
+      168
+    ]
+  },
+  "artifacts": {
+    "annotated": "annotated.jpg",
+    "preprocessed": "preprocessed.jpg"
+  },
+  "preprocessing": {
+    "enabled": true,
+    "strength": 1.0,
+    "radius": 0.95,
+    "effect": "standard",
+    "center_x": 0.5,
+    "center_y": 0.5
+  },
+  "detections": [
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.604,
+      "bbox": [
+        159,
+        72,
+        175,
+        89
+      ],
+      "center": [
+        167,
+        80
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.598,
+      "bbox": [
+        204,
+        107,
+        226,
+        127
+      ],
+      "center": [
+        215,
+        117
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.567,
+      "bbox": [
+        93,
+        124,
+        106,
+        144
+      ],
+      "center": [
+        99,
+        134
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.444,
+      "bbox": [
+        177,
+        104,
+        198,
+        124
+      ],
+      "center": [
+        187,
+        114
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.434,
+      "bbox": [
+        179,
+        104,
+        197,
+        124
+      ],
+      "center": [
+        188,
+        114
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.427,
+      "bbox": [
+        181,
+        104,
+        197,
+        124
+      ],
+      "center": [
+        189,
+        114
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.363,
+      "bbox": [
+        159,
+        59,
+        178,
+        74
+      ],
+      "center": [
+        168,
+        66
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.353,
+      "bbox": [
+        182,
+        107,
+        197,
+        124
+      ],
+      "center": [
+        189,
+        115
+      ]
+    },
+    {
+      "class_name": "Truck",
+      "class_raw": "truck",
+      "confidence": 0.346,
+      "bbox": [
+        159,
+        58,
+        178,
+        74
+      ],
+      "center": [
+        168,
+        66
+      ]
+    },
+    {
+      "class_name": "Truck",
+      "class_raw": "truck",
+      "confidence": 0.258,
+      "bbox": [
+        79,
+        80,
+        94,
+        108
+      ],
+      "center": [
+        86,
+        94
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.243,
+      "bbox": [
+        105,
+        27,
+        114,
+        35
+      ],
+      "center": [
+        109,
+        31
+      ]
+    },
+    {
+      "class_name": "Truck",
+      "class_raw": "truck",
+      "confidence": 0.241,
+      "bbox": [
+        79,
+        79,
+        96,
+        108
+      ],
+      "center": [
+        87,
+        93
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.2,
+      "bbox": [
+        79,
+        83,
+        94,
+        108
+      ],
+      "center": [
+        86,
+        95
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.168,
+      "bbox": [
+        152,
+        24,
+        166,
+        34
+      ],
+      "center": [
+        159,
+        29
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.156,
+      "bbox": [
+        71,
+        109,
+        87,
+        123
+      ],
+      "center": [
+        79,
+        116
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.131,
+      "bbox": [
+        106,
+        21,
+        122,
+        34
+      ],
+      "center": [
+        114,
+        27
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.111,
+      "bbox": [
+        153,
+        24,
+        166,
+        34
+      ],
+      "center": [
+        159,
+        29
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.111,
+      "bbox": [
+        183,
+        108,
+        197,
+        124
+      ],
+      "center": [
+        190,
+        116
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.105,
+      "bbox": [
+        106,
+        20,
+        122,
+        35
+      ],
+      "center": [
+        114,
+        27
+      ]
+    },
+    {
+      "class_name": "Truck",
+      "class_raw": "truck",
+      "confidence": 0.102,
+      "bbox": [
+        79,
+        78,
+        97,
+        108
+      ],
+      "center": [
+        88,
+        93
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.099,
+      "bbox": [
+        106,
+        24,
+        117,
+        35
+      ],
+      "center": [
+        111,
+        29
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.089,
+      "bbox": [
+        151,
+        24,
+        166,
+        34
+      ],
+      "center": [
+        158,
+        29
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.087,
+      "bbox": [
+        160,
+        60,
+        178,
+        74
+      ],
+      "center": [
+        169,
+        67
+      ]
+    },
+    {
+      "class_name": "Truck",
+      "class_raw": "truck",
+      "confidence": 0.085,
+      "bbox": [
+        79,
+        83,
+        94,
+        108
+      ],
+      "center": [
+        86,
+        95
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.072,
+      "bbox": [
+        160,
+        59,
+        175,
+        67
+      ],
+      "center": [
+        167,
+        63
+      ]
+    },
+    {
+      "class_name": "Car",
+      "class_raw": "car",
+      "confidence": 0.072,
+      "bbox": [
+        94,
+        126,
+        106,
+        144
+      ],
+      "center": [
+        100,
+        135
+      ]
+    }
+  ]
+}
