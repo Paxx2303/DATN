@@ -1,3 +1,0 @@
-541: [Normal] 2.5. Thiết kế giao diện người dùng
-542: [Normal] 2.5.1. Cấu trúc giao diện web
-561: [Normal] 2.5.2. Nguyên tắc thiết kế UX

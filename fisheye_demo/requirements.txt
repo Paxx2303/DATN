@@ -4,33 +4,33 @@
 # ============================================================
 
 # --- Web Framework ---
-Flask==3.0.3
-Werkzeug==3.0.3
+Flask>=3.0.3
+Werkzeug>=3.0.3
 
 # --- Computer Vision & ML ---
-ultralytics==8.2.82        # YOLOv11 (includes ByteTrack, BoT-SORT)
-opencv-python-headless==4.10.0.84
-Pillow==10.4.0
-numpy==1.26.4
+ultralytics>=8.3.0        # YOLOv11 với C3k2 block support
+opencv-python-headless>=4.10.0.84
+Pillow>=10.4.0
+numpy>=1.26.4,<2.0.0
 
 # --- Database ---
-psycopg2-binary==2.9.9     # PostgreSQL client (production)
+psycopg2-binary>=2.9.9     # PostgreSQL client (production)
 
 # --- HTTP & Networking ---
-requests==2.32.3
-urllib3==2.2.2
+requests>=2.32.3
+urllib3>=2.2.2
 
 # --- Google Cloud (optional) ---
-google-cloud-storage==2.18.2
+google-cloud-storage>=2.18.2
 
 # --- HTML Parsing (external camera discovery) ---
-beautifulsoup4==4.12.3
-lxml==5.3.0
+beautifulsoup4>=4.12.3
+lxml>=5.3.0
 
 # --- Utilities ---
-python-dotenv==1.0.1
-tqdm==4.66.5
+python-dotenv>=1.0.1
+tqdm>=4.66.5
 
 # --- Testing ---
-pytest==8.3.2
-pytest-mock==3.14.0
+pytest>=8.3.2
+pytest-mock>=3.14.0
