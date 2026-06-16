@@ -373,15 +373,10 @@ def _fetch_youtube_live_frame(video_id: str) -> Optional[Image.Image]:
     Frame full-res YouTube live: ưu tiên reader nền (liên tục → tức thì & tươi).
     Khi reader chưa có frame đầu (vừa khởi động) → fallback mở-1-lần. None nếu hỏng.
     """
+    # Background reader (ffmpeg/OpenCV) đã thử và gây kẹt frame / sập app → TẮT.
+    # Mở-1-lần mỗi chu kỳ: ổn định, ảnh tươi (~0.5 fps, giới hạn của HLS googlevideo).
     if not _YT_LIVE_FRAMES:
         return None
-    try:
-        img = _get_reader_frame(video_id)
-        if img is not None:
-            return img
-    except Exception as exc:
-        logger.warning("reader frame %s lỗi: %s", video_id, exc)
-    # Fallback: mở 1 lần (cho chu kỳ đầu khi reader chưa kịp có frame)
     hls = resolve_youtube_hls(video_id)
     if not hls:
         return None
