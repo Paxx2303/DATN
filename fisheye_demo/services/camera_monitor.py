@@ -141,6 +141,12 @@ class ExternalCameraLiveMonitor:
         self._camera_speed_estimators: dict = {}       # cam_key → SpeedEstimator
         self._camera_congestion_detectors: dict = {}   # cam_key → CongestionDetector
         self._camera_congestion: dict[str, dict] = {}  # cam_key → last congestion result
+        self._camera_incident_detectors: dict = {}     # cam_key → IncidentDetector
+
+        # ALPR (license plate) state on live feed
+        self._live_plates: list[dict] = []             # rolling recent plates (newest last)
+        self._alpr_seen: dict[str, int] = {}           # "cam|plate" → last cycle saved (dedup)
+        self._alpr_total: int = 0                      # total plates saved this session
 
     # ── Public API ──────────────────────────────────────────────────────────
 
@@ -156,6 +162,8 @@ class ExternalCameraLiveMonitor:
         model_key: str = None,
         interval_seconds: float = None,
         compute_mode: str = None,
+        alpr_enabled: bool = None,
+        alpr_every: int = None,
     ) -> dict:
         """Start (or restart) live monitoring with the given config."""
         with self._lock:
@@ -187,6 +195,9 @@ class ExternalCameraLiveMonitor:
                 "model_key":      model_key      or Config.DEFAULT_MODEL_KEY,
                 "interval":       interval_seconds or Config.EXT_CAM_INTERVAL,
                 "device":         device,
+                "alpr_enabled":   (Config.ALPR_LIVE_ENABLED if alpr_enabled is None
+                                   else bool(alpr_enabled)),
+                "alpr_every":     int(alpr_every or Config.ALPR_LIVE_EVERY),
             }
 
             # Reset per-camera analytics on every (re)start
@@ -194,6 +205,10 @@ class ExternalCameraLiveMonitor:
             self._camera_speed_estimators.clear()
             self._camera_congestion_detectors.clear()
             self._camera_congestion.clear()
+            self._camera_incident_detectors.clear()
+            self._live_plates.clear()
+            self._alpr_seen.clear()
+            self._alpr_total = 0
             self._last_counts.clear()
             self._total_vehicles = 0
             self._cycle_count = 0
@@ -239,6 +254,10 @@ class ExternalCameraLiveMonitor:
         from speed_estimator import SpeedEstimator
         from congestion_detector import CongestionDetector
         from utils.helpers import draw_detections_on_image
+        from line_counter import line_counter
+        from incident_detector import IncidentDetector
+        from alpr import plate_recognizer
+        import db as database
 
         cfg = self._config
 
@@ -343,24 +362,99 @@ class ExternalCameraLiveMonitor:
                     tracked, det_assignments = self._camera_trackers[cam_key].update(dets)
 
                     # Speed estimation
+                    fps_equiv = 1.0 / max(interval_s, 0.5)
                     if cam_key not in self._camera_speed_estimators:
-                        fps_equiv = 1.0 / max(interval_s, 0.5)
                         self._camera_speed_estimators[cam_key] = SpeedEstimator(
                             fps=fps_equiv,
                             scale_factor=Config.SPEED_SCALE_FACTOR,
                         )
                     speed_est = self._camera_speed_estimators[cam_key]
                     track_speeds: dict[int, float] = {}
+                    # Map det_index → class_name for violation reporting
+                    _tid_to_class: dict[int, str] = {
+                        det_assignments[di]: dets[di].get("class_name", "unknown")
+                        for di in range(len(dets)) if di in det_assignments
+                    }
                     for tid, (cx, cy) in tracked.items():
-                        speed_est.update(
-                            track_id=tid, cx=cx, cy=cy,
-                            frame_idx=self._cycle_count,
+                        track_speed = speed_est.update_single(
+                            tid, cx, cy, self._cycle_count,
+                            _tid_to_class.get(tid, "unknown"),
                         )
-                        track_speed = speed_est.get_speed(tid)
+                        # Speed violation check (built into SpeedEstimator)
+                        violation = speed_est._violation_checker.check(
+                            tid, track_speed, self._cycle_count,
+                        )
+                        if violation:
+                            vtype = _tid_to_class.get(tid, "unknown")
+                            try:
+                                database.save_speed_violation(
+                                    cam_key, tid, vtype,
+                                    track_speed, speed_est.speed_limit_kmh, "",
+                                )
+                                alert_manager.fire_speed_violation_alert(
+                                    tid, track_speed, speed_est.speed_limit_kmh,
+                                    cam_key, vtype,
+                                )
+                            except Exception as _sv_exc:
+                                logger.warning("save_speed_violation error: %s", _sv_exc)
                         if track_speed > 0:
                             track_speeds[tid] = track_speed
                     avg_speed = speed_est.get_average_speed()
                     max_speed = speed_est.get_max_speed()
+
+                    # Line counter — update per tracked detection
+                    for det_idx, det in enumerate(dets):
+                        tid = det_assignments.get(det_idx)
+                        if tid is None:
+                            continue
+                        cx_lc, cy_lc = tracked.get(tid, (0, 0))
+                        line_counter.update(
+                            tid, cx_lc, cy_lc,
+                            det.get("class_name", "unknown"),
+                            self._cycle_count, w, h,
+                        )
+                    # Flush crossings → DB
+                    for crossing in line_counter.pop_recent_crossings():
+                        try:
+                            from datetime import datetime as _dt
+                            hour_bucket = _dt.utcnow().strftime("%Y-%m-%d %H:00")
+                            database.save_traffic_count(
+                                crossing["camera_id"], crossing["direction"],
+                                crossing["class_name"], hour_bucket, 1,
+                            )
+                        except Exception as _lc_exc:
+                            logger.warning("save_traffic_count error: %s", _lc_exc)
+
+                    # Incident detection
+                    if cam_key not in self._camera_incident_detectors:
+                        self._camera_incident_detectors[cam_key] = IncidentDetector(
+                            camera_id=cam_key, fps=fps_equiv,
+                        )
+                    incident_det = self._camera_incident_detectors[cam_key]
+                    boxes_inc = {}
+                    labels_inc = {}
+                    for det_idx, det in enumerate(dets):
+                        tid = det_assignments.get(det_idx)
+                        if tid is None:
+                            continue
+                        boxes_inc[tid] = tuple(det["bbox"])
+                        labels_inc[tid] = det.get("class_name", "unknown")
+                    if boxes_inc:
+                        new_incidents = incident_det.analyze(
+                            boxes=boxes_inc, labels=labels_inc,
+                            frame_idx=self._cycle_count, fps=fps_equiv,
+                        )
+                        for incident in new_incidents:
+                            try:
+                                database.save_incident(incident)
+                                alert_manager.fire_incident_alert(
+                                    incident["incident_type"],
+                                    incident["description"],
+                                    cam_key,
+                                    incident.get("severity", "medium"),
+                                )
+                            except Exception as _inc_exc:
+                                logger.warning("save_incident error: %s", _inc_exc)
 
                     # Congestion detection
                     if cam_key not in self._camera_congestion_detectors:
@@ -380,13 +474,23 @@ class ExternalCameraLiveMonitor:
                             det_copy["speed_kmh"] = speed_kmh
                         detections_with_speed.append(det_copy)
 
+                    # ── ALPR: nhận diện biển số trên feed live ──────
+                    # Chạy OCR trên ảnh GỐC (entry.snapshot trước khi vẽ), throttle
+                    # theo alpr_every chu kỳ để không làm chậm vòng lặp live.
+                    cam_plates: list[dict] = self._run_live_alpr(
+                        plate_recognizer, entry.snapshot, dets, cam_key, database,
+                    )
+
                     # Annotate frame with per-vehicle speed labels
                     annotated = draw_detections_on_image(
                         entry.snapshot, detections_with_speed, speed_data=detection_speeds,
                     )
+                    # Draw recognised plates (gold boxes + text) on top
+                    if cam_plates:
+                        annotated = _draw_plates_on_pil(annotated, cam_plates)
                     entry.snapshot = annotated
                     self._stream_frames[f"camera_{entry.camera_index}"] = \
-                        _pil_to_jpeg_bytes(annotated)
+                        _pil_to_jpeg_bytes(annotated, quality=92)
 
                     # Collage label: "CamName | 12v | H | 45km/h"
                     cong_initial = congestion["level"][0].upper()
@@ -425,6 +529,7 @@ class ExternalCameraLiveMonitor:
                         "annotated":     f"/api/external-camera/snapshot/{entry.camera_index}",
                         "title":         cam_key,
                         "total_objects": count,
+                        "plates":        cam_plates,
                     })
 
                 # ── Step 5: Global analytics ───────────────────────────────
@@ -479,6 +584,12 @@ class ExternalCameraLiveMonitor:
                         "level":     worst_cong,
                         "avg_score": round(sum(cong_scores) / max(len(cong_scores), 1), 2),
                     },
+                    "alpr": {
+                        "enabled":   bool(cfg.get("alpr_enabled")),
+                        "available": plate_recognizer.is_available(),
+                        "total":     self._alpr_total,
+                        "recent":    list(reversed(self._live_plates[-12:])),
+                    },
                 }
                 self._last_error            = None
                 self._last_cycle_duration_ms = round(elapsed_ms, 1)
@@ -504,6 +615,70 @@ class ExternalCameraLiveMonitor:
             elapsed    = time.time() - cycle_start
             sleep_time = max(0.0, cfg["interval"] - elapsed)
             time.sleep(sleep_time)
+
+    # ── ALPR (license plate) on live feed ───────────────────────────────────
+
+    def _run_live_alpr(self, recognizer, snapshot, dets, cam_key, database) -> list[dict]:
+        """
+        Nhận diện biển số trên 1 snapshot live (có throttle theo alpr_every chu kỳ).
+
+        - Chỉ OCR vùng xe (Car/Bus/Truck/Motorbike), giới hạn số crop để giữ tốc độ.
+        - Lưu DB với camera_id=cam_key (dedup theo cửa sổ chu kỳ để tránh trùng).
+        - Trả list plates {plate, confidence, bbox, vehicle_type} để vẽ lên frame.
+        """
+        cfg = self._config
+        if not cfg.get("alpr_enabled") or snapshot is None:
+            return []
+        every = max(1, int(cfg.get("alpr_every", Config.ALPR_LIVE_EVERY)))
+        if self._cycle_count % every != 0:
+            return []
+        if not recognizer.is_available():
+            return []
+
+        try:
+            # PIL (RGB) → BGR ndarray cho OCR
+            bgr = np.array(snapshot.convert("RGB"))[:, :, ::-1].copy()
+            vehicle_boxes: list[dict] = []
+            for d in dets:
+                if d.get("class_name") in ("Car", "Bus", "Truck", "Motorbike"):
+                    bbox = d.get("bbox")
+                    if bbox and len(bbox) >= 4:
+                        vehicle_boxes.append({"bbox": bbox,
+                                              "vehicle_type": d["class_name"]})
+            vehicle_boxes = vehicle_boxes[:max(1, int(Config.ALPR_LIVE_MAX_VEH))]
+            plates = recognizer.recognize(bgr, vehicle_boxes or None)
+        except Exception as exc:
+            logger.debug("live ALPR error on %s: %s", cam_key, exc)
+            return []
+
+        from datetime import datetime as _dt
+        dedup_window = max(20, every * 10)   # số chu kỳ coi là "trùng"
+        for p in plates:
+            key = f"{cam_key}|{p['plate']}"
+            last = self._alpr_seen.get(key)
+            if last is not None and (self._cycle_count - last) < dedup_window:
+                continue  # vẫn vẽ lên frame nhưng không lưu lại
+            self._alpr_seen[key] = self._cycle_count
+            try:
+                database.save_license_plate(
+                    plate_text=p["plate"], confidence=p["confidence"],
+                    vehicle_type=p.get("vehicle_type", "unknown"),
+                    camera_id=cam_key, detection_id="live",
+                    bbox=p.get("bbox", []),
+                )
+                self._alpr_total += 1
+            except Exception as exc:
+                logger.warning("save_license_plate (live) failed: %s", exc)
+            self._live_plates.append({
+                "plate":        p["plate"],
+                "confidence":   p["confidence"],
+                "vehicle_type": p.get("vehicle_type", "unknown"),
+                "camera":       cam_key,
+                "time":         _dt.now().strftime("%H:%M:%S"),
+            })
+        if len(self._live_plates) > 60:
+            self._live_plates = self._live_plates[-60:]
+        return plates
 
     # ── Frame / stream access ───────────────────────────────────────────────
 
@@ -549,6 +724,12 @@ class ExternalCameraLiveMonitor:
                                                   {"avg_kmh": 0.0, "max_kmh": 0.0}),
             "congestion_summary":     result.get("congestion_summary",
                                                   {"level": "low", "avg_score": 0.0}),
+            "alpr":                   result.get("alpr", {
+                                          "enabled":   bool(self._config.get("alpr_enabled")),
+                                          "available": False,
+                                          "total":     self._alpr_total,
+                                          "recent":    list(reversed(self._live_plates[-12:])),
+                                      }),
             "config": {k: v for k, v in self._config.items() if k != "preprocessing"},
         }
 
@@ -556,6 +737,26 @@ class ExternalCameraLiveMonitor:
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _draw_plates_on_pil(img: Image.Image, plates: list[dict]) -> Image.Image:
+    """Vẽ khung biển số (vàng) + text lên PIL image."""
+    try:
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        for p in plates:
+            bbox = p.get("bbox") or []
+            if len(bbox) < 4:
+                continue
+            x1, y1, x2, y2 = (int(v) for v in bbox[:4])
+            label = f"{p.get('plate', '')} {float(p.get('confidence', 0)):.2f}"
+            draw.rectangle([x1, y1, x2, y2], outline=(255, 215, 0), width=2)
+            tw = 7 * len(label) + 4
+            draw.rectangle([x1, max(0, y1 - 14), x1 + tw, y1], fill=(255, 215, 0))
+            draw.text((x1 + 2, max(0, y1 - 13)), label, fill=(0, 0, 0))
+    except Exception as exc:
+        logger.debug("_draw_plates_on_pil error: %s", exc)
+    return img
+
 
 def _pil_to_jpeg_bytes(img: Image.Image, quality: int = 80) -> bytes:
     buf = io.BytesIO()

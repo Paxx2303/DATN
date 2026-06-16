@@ -112,13 +112,11 @@ function renderExternalCameraGrid(data, cacheBustToken = null) {
     article.className = "external-result-item";
     article.dataset.camIndex = String(camera.index ?? 0);
 
-    // Image
     const img = document.createElement("img");
-    let src = camera.annotated || "";
-    if (cacheBustToken != null && src && !src.startsWith("data:")) {
-      src = `${src}?_=${String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "")}`;
-    } else if (cacheBustToken != null && src.startsWith("data:")) {
-      src = `${src.split("#")[0]}#${String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "")}`;
+    const snapshot = camera.annotated || `/api/external-camera/snapshot/${camera.index ?? 0}`;
+    const src = buildSnapshotSrc(snapshot, cacheBustToken);
+    if (cacheBustToken != null) {
+      img.dataset.liveBust = String(cacheBustToken);
     }
     img.src = src;
     img.alt = camera.title || camera.name || "";
@@ -150,6 +148,31 @@ function renderExternalCameraGrid(data, cacheBustToken = null) {
   }
 }
 
+function buildSnapshotSrc(url, cacheBustToken = null) {
+  if (!url) return "";
+  if (url.startsWith("data:")) {
+    if (cacheBustToken == null) return url;
+    return `${url.split("#")[0]}#${String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "")}`;
+  }
+  if (cacheBustToken == null) return url;
+  const base = url.split("#")[0].split("?")[0];
+  return `${base}?_=${String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "")}`;
+}
+
+function refreshLiveFrames(liveResult, cacheBustToken = null) {
+  if (!liveResult) return;
+  const overview = liveResult.overview || "/api/external-camera/snapshot/overview";
+  renderMedia(elements.resultMedia, overview, "image", cacheBustToken);
+
+  const cameras = liveResult.cameras || [];
+  const hasGrid = elements.externalCameraResults.querySelector("[data-cam-index]");
+  if (!hasGrid && cameras.length) {
+    renderExternalCameraGrid(liveResult, cacheBustToken);
+    return;
+  }
+  updateCameraOverlays(cameras, cacheBustToken);
+}
+
 /** Update speed/congestion overlays AND images on existing camera items from live status data */
 function updateCameraOverlays(cameras, cacheBustToken = null) {
   if (!cameras || !cameras.length) return;
@@ -157,18 +180,14 @@ function updateCameraOverlays(cameras, cacheBustToken = null) {
     const idx = cam.index ?? 0;
     const article = elements.externalCameraResults.querySelector(`[data-cam-index="${idx}"]`);
 
-    // Update image src if we have a new cache bust token
     if (article && cacheBustToken != null) {
-      const img = article.querySelector('img');
-      if (img && cam.annotated) {
-        let src = cam.annotated;
-        if (!src.startsWith("data:")) {
-          src = `${src}?_=${String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "")}`;
-        }
-        // Only update src if it's different to avoid flicker
-        const currentSrc = img.src.split('?')[0];
-        const newSrc = src.split('?')[0];
-        if (currentSrc !== newSrc || cacheBustToken) {
+      const img = article.querySelector("img");
+      const snapshot = cam.annotated || `/api/external-camera/snapshot/${idx}`;
+      if (img && snapshot) {
+        const src = buildSnapshotSrc(snapshot, cacheBustToken);
+        const bustKey = String(cacheBustToken);
+        if (img.dataset.liveBust !== bustKey) {
+          img.dataset.liveBust = bustKey;
           img.src = src;
         }
       }
@@ -254,53 +273,6 @@ async function refreshAlertPanel() {
   } catch (_) { /* silent */ }
 }
 
-// ── MJPEG live streams ───────────────────────────────────────────────────────
-
-function attachExternalCameraLiveStreams() {
-  const seed = Date.now();
-  renderMedia(
-    elements.resultMedia,
-    `/api/external-camera/live/stream?view=overview&_=${seed}`,
-    "image",
-  );
-
-  elements.externalCameraResults.replaceChildren();
-  // Show stream items for each known camera (up to 4)
-  const camCount = (appState.lastLiveResult?.camera_count) || 1;
-  const liveCameras = appState.lastLiveResult?.cameras || [];
-  for (let i = 0; i < Math.min(camCount, 4); i++) {
-    const cam = liveCameras[i] || {};
-    const article = document.createElement("article");
-    article.className = "external-result-item";
-    article.dataset.camIndex = String(i);
-
-    const img = document.createElement("img");
-    img.src = `/api/external-camera/live/stream?view=camera_${i}&_=${seed}`;
-    img.alt = cam.title || cam.name || `Camera ${i + 1} live`;
-
-    const speedEl = document.createElement("div");
-    speedEl.className = "cam-speed-badge";
-    speedEl.id = `cam-speed-${i}`;
-    speedEl.innerHTML = formatCameraSpeedBadge(cam);
-
-    const congEl = document.createElement("div");
-    congEl.className = "cam-cong-badge low";
-    congEl.id = `cam-cong-${i}`;
-    congEl.textContent = "LOW";
-
-    const copy = document.createElement("div");
-    copy.className = "external-result-copy";
-    const titleEl = document.createElement("strong");
-    titleEl.textContent = cam.title || cam.name || `Camera ${i + 1}`;
-    const meta = document.createElement("span");
-    meta.id = `cam-meta-${i}`;
-    meta.textContent = formatCameraMeta(cam) || "MJPEG feed";
-    copy.append(titleEl, meta);
-    article.append(img, speedEl, congEl, copy);
-    elements.externalCameraResults.appendChild(article);
-  }
-}
-
 function setExternalCameraLiveButtons(isRunning) {
   if (elements.externalCameraLiveStart) elements.externalCameraLiveStart.disabled = isRunning;
   if (elements.externalCameraLiveStop) elements.externalCameraLiveStop.disabled = !isRunning;
@@ -362,68 +334,54 @@ function renderExternalCameraLiveStatus(data, options = {}) {
   `;
 
   setExternalCameraLiveButtons(running);
+  updateLiveAlprPanel(data, running);
   if (running !== appState.liveMonitorRunning) {
     appState.set("liveMonitorRunning", running);
-    appState.set("liveStreamAttached", false);
     appState.set("lastLiveCycleCount", null);
     appState.set("lastLiveUpdatedAt", null);
     appState.set("lastLiveResult", null);
     syncExternalCameraLivePolling();
   }
 
-  if (running && data.stream_ready && !appState.liveStreamAttached) {
-    attachExternalCameraLiveStreams();
-    appState.set("liveStreamAttached", true);
-  }
-
   const liveResult = data.last_result;
   const lastUpdatedRaw = data.last_updated_at || null;
+  const bust = `${cycleCount}-${String(lastUpdatedRaw || "").replace(/\D/g, "").slice(-12)}`;
+  const framesAdvanced = forceRedraw || !running ||
+    cycleCount !== appState.lastLiveCycleCount ||
+    lastUpdatedRaw !== appState.lastLiveUpdatedAt;
 
-  // Always update congestion panel + camera overlays if we have live data
   if (liveResult) {
     appState.set("lastLiveResult", liveResult);
-    const bust = `${cycleCount}-${String(lastUpdatedRaw || "").replace(/\D/g, "").slice(-12)}`;
     updateCongestionPanel(liveResult);
-    updateCameraOverlays(liveResult.cameras || [], bust);
     updateLiveStatsBar(data, liveResult);
     refreshAlertPanel();
+
+    if (running && framesAdvanced) {
+      appState.set("lastLiveCycleCount", cycleCount);
+      appState.set("lastLiveUpdatedAt", lastUpdatedRaw);
+      resetDownloads();
+      appState.set("latestRecord", null);
+      elements.requestId.textContent = "live-monitor";
+      elements.savedResult.textContent = "live snapshot";
+      elements.preprocessedMeta.textContent =
+        liveResult.preprocessing?.enabled ? "fisheye snapshots" : "raw snapshots";
+      elements.resultMeta.textContent = `${liveResult.camera_count} cameras`;
+      refreshLiveFrames(liveResult, bust);
+      renderExternalCameraSummary(liveResult);
+      return;
+    }
+
+    if (running) {
+      updateCameraOverlays(liveResult.cameras || [], bust);
+      return;
+    }
   } else {
     updateCongestionPanel(null);
   }
 
   if (!liveResult) return;
-  const framesAdvanced = forceRedraw || !running ||
-    cycleCount !== appState.lastLiveCycleCount ||
-    lastUpdatedRaw !== appState.lastLiveUpdatedAt;
 
-  if (running && !framesAdvanced) return;
-
-  if (running) {
-    appState.set("lastLiveCycleCount", cycleCount);
-    appState.set("lastLiveUpdatedAt", lastUpdatedRaw);
-    if (!data.stream_ready) {
-      resetDownloads();
-      appState.set("latestRecord", null);
-      elements.requestId.textContent = "live-monitor";
-      elements.savedResult.textContent = "warming up";
-      elements.preprocessedMeta.textContent =
-        liveResult.preprocessing?.enabled ? "fisheye snapshots" : "raw snapshots";
-      elements.resultMeta.textContent = `${liveResult.camera_count} cameras`;
-      const bust = `${cycleCount}-${String(lastUpdatedRaw || "").replace(/\D/g, "").slice(-12)}`;
-      renderMedia(elements.resultMedia, liveResult.overview || "", "image", bust);
-      renderExternalCameraGrid(liveResult, bust);
-      renderExternalCameraSummary(liveResult);
-    } else {
-      // Stream ready — MJPEG active, just update overlays
-      renderExternalCameraSummary(liveResult);
-      elements.requestId.textContent = "live-monitor";
-      elements.savedResult.textContent = "mjpeg stream";
-      elements.preprocessedMeta.textContent =
-        liveResult.preprocessing?.enabled ? "fisheye streaming" : "raw streaming";
-      elements.resultMeta.textContent = `${liveResult.camera_count} cameras`;
-    }
-    return;
-  }
+  if (running) return;
 
   // Stopped — show last snapshot
   resetDownloads();
@@ -433,7 +391,7 @@ function renderExternalCameraLiveStatus(data, options = {}) {
   elements.preprocessedMeta.textContent =
     liveResult.preprocessing?.enabled ? "fisheye snapshots" : "raw snapshots";
   elements.resultMeta.textContent = `${liveResult.camera_count} cameras`;
-  const bust = `${cycleCount}-${String(lastUpdatedRaw || "").replace(/\D/g, "").slice(-12)}`;
+  // `bust` is already declared at the top of this function (cache-busting token); reuse it.
   renderMedia(elements.resultMedia, liveResult.overview || "", "image", bust);
   renderExternalCameraGrid(liveResult, bust);
   renderExternalCameraSummary(liveResult);
@@ -457,8 +415,13 @@ function buildExternalCameraFormData() {
   formData.append("fisheye_effect", elements.fisheyeEffect.value);
   formData.append(
     "apply_fisheye",
-    resolveApplyFisheye(elements.fisheyeEnabled.value, sourceLayout, { forLive: true }),
+    resolveApplyFisheye(elements.fisheyeEnabled.value, sourceLayout, {
+      forLive: true,
+      modelKey: elements.modelKey.value,
+    }),
   );
+  const alprEl = document.getElementById("external-camera-alpr");
+  formData.append("alpr", alprEl && alprEl.checked ? "true" : "false");
   return formData;
 }
 
@@ -593,6 +556,35 @@ function updateLiveStatsBar(data, liveResult) {
   }
   if (camEl) camEl.innerHTML = `<i class="ti ti-video" style="margin-right:4px;"></i>${cameras} cam`;
   if (cycleEl) cycleEl.textContent = `cycle ${cycle}`;
+}
+
+function updateLiveAlprPanel(data, running) {
+  const panel = document.getElementById("live-alpr-panel");
+  if (!panel) return;
+  const alpr = data.alpr || data.last_result?.alpr || null;
+  const show = Boolean(running && alpr && alpr.enabled);
+  panel.style.display = show ? "" : "none";
+  if (!show) return;
+
+  const totalEl = document.getElementById("live-alpr-total");
+  if (totalEl) totalEl.textContent = String(alpr.total ?? 0);
+
+  const list = document.getElementById("live-alpr-list");
+  if (!list) return;
+  const recent = alpr.recent || [];
+  if (!alpr.available) {
+    list.innerHTML = '<div style="font-size:11px; color:var(--color-text-tertiary);">OCR chưa sẵn sàng (cài <code>easyocr</code> để bật nhận diện biển số).</div>';
+    return;
+  }
+  if (!recent.length) {
+    list.innerHTML = '<div style="font-size:11px; color:var(--color-text-tertiary);">Đang quét… chưa đọc được biển số nào.</div>';
+    return;
+  }
+  list.innerHTML = recent.map((p) => `
+    <span class="badge b-amber" style="font-family:monospace; padding:5px 9px;" title="${escapeHtml(p.vehicle_type || "")} · ${escapeHtml(p.camera || "")} · ${escapeHtml(p.time || "")}">
+      ${escapeHtml(p.plate)} · ${(Number(p.confidence) * 100).toFixed(0)}%
+      <span style="opacity:.7; font-family:inherit;"> ${escapeHtml(p.camera || "")}</span>
+    </span>`).join("");
 }
 
 function resetDownloads() {

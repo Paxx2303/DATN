@@ -1,3 +1,5 @@
+> ⚠️ **TÀI LIỆU CŨ.** Nguồn chuẩn & cập nhật là [`HE_THONG.md`](HE_THONG.md). File này giữ lại để tham khảo lịch sử.
+
 # Tài liệu Kiến trúc Hệ thống FishEye8K & Kế hoạch Refactor (System Overview & Refactor Guide)
 
 Tài liệu này cung cấp cái nhìn chi tiết và toàn diện về toàn bộ mã nguồn của dự án **DATN - FishEye8K Detection System** (nằm trong thư mục `fisheye_demo`), nhằm mục đích làm tài liệu tham khảo cho **Claude** (hoặc bất kỳ AI nào khác) để tiến hành đánh giá, tối ưu hóa và tái cấu trúc (refactor) hệ thống một cách an toàn và hiệu quả nhất.

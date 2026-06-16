@@ -1,3 +1,5 @@
+> ⚠️ **TÀI LIỆU CŨ.** Nguồn chuẩn & cập nhật là [`HE_THONG.md`](HE_THONG.md). File này giữ lại để tham khảo lịch sử.
+
 # System Architech
 
 ## 1. Muc dich tai lieu

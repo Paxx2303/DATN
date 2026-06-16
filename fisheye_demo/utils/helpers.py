@@ -52,18 +52,25 @@ def classify_upload_file(file_storage, filename: str) -> tuple[bool, bool]:
     return is_image, is_video
 
 
+def is_fisheye_model(model_key: Optional[str]) -> bool:
+    """True when checkpoint expects fisheye-warped input."""
+    key = (model_key or "").lower()
+    return key in {"best", "fisheye"} or "fisheye" in key
+
+
 def resolve_fisheye_enabled(
     apply_raw: Optional[str],
     source_layout: str = "normal",
     *,
     auto_apply_for_normal: bool = False,
+    model_key: Optional[str] = None,
 ) -> bool:
     """
     Resolve whether fisheye preprocessing should run.
 
     - explicit true/false always wins
     - auto / missing:
-        upload detect  → apply when source_layout is normal (if auto_apply_for_normal)
+        upload detect  → warp only for fisheye checkpoints on normal layout
         live/external  → keep raw frames unless user forces enabled
     """
     if apply_raw is not None:
@@ -74,7 +81,9 @@ def resolve_fisheye_enabled(
             return False
 
     if auto_apply_for_normal:
-        return source_layout == "normal"
+        if source_layout == "fisheye":
+            return False
+        return is_fisheye_model(model_key)
     return False
 
 

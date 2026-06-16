@@ -19,17 +19,39 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent.resolve()
 
 
+def _env(*names: str, default: str | None = None) -> str | None:
+    """Trả giá trị env var đầu tiên tồn tại trong danh sách tên (hỗ trợ alias).
+
+    Cho phép cùng một thiết lập dùng nhiều tên (ví dụ COMPUTE_DEVICE hoặc
+    FISHEYE_DEVICE) để .env và config.py không bị lệch nhau.
+    """
+    for name in names:
+        val = os.getenv(name)
+        if val is not None and val != "":
+            return val
+    return default
+
+
+def _resolve_dir(value: str | None, fallback: Path) -> Path:
+    """Chuyển một path từ env thành Path tuyệt đối (relative → so với BASE_DIR)."""
+    if not value:
+        return fallback
+    p = Path(value)
+    return p if p.is_absolute() else (BASE_DIR / p)
+
+
 class Config:
     # ── Paths ────────────────────────────────────────────────
-    UPLOAD_FOLDER     = BASE_DIR / "static" / "uploads"
-    RESULTS_FOLDER    = BASE_DIR / "static" / "results"
+    UPLOAD_FOLDER     = _resolve_dir(_env("FISHEYE_UPLOAD_DIR"), BASE_DIR / "static" / "uploads")
+    RESULTS_FOLDER    = _resolve_dir(_env("FISHEYE_RESULTS_DIR"), BASE_DIR / "static" / "results")
     MODEL_FOLDER      = BASE_DIR                 # Tìm trực tiếp ở thư mục gốc (BASE_DIR) vì checkpoints nằm ở đó
     DB_PATH           = BASE_DIR / "fisheye.db" # SQLite fallback
+    RECENT_IMAGE_DB   = _resolve_dir(_env("FISHEYE_RECENT_IMAGE_DB"), BASE_DIR / "recent_images.db")
 
     # ── Flask ────────────────────────────────────────────────
-    SECRET_KEY        = os.getenv("SECRET_KEY", "fisheye8k-dev-secret")
-    DEBUG             = os.getenv("FLASK_DEBUG", "0") == "1"
-    MAX_CONTENT_LENGTH = 500 * 1024 * 1024   # 500 MB upload limit
+    SECRET_KEY        = _env("SECRET_KEY", "FISHEYE_SECRET_KEY", default="fisheye8k-dev-secret")
+    DEBUG             = _env("FLASK_DEBUG", "FISHEYE_DEBUG", default="0") == "1"
+    MAX_CONTENT_LENGTH = int(_env("FISHEYE_MAX_UPLOAD_MB", default="500")) * 1024 * 1024
 
     # ── Database ─────────────────────────────────────────────
     DATABASE_URL      = os.getenv("DATABASE_URL", "")  # postgresql://...
@@ -41,9 +63,9 @@ class Config:
         "nano":    str(MODEL_FOLDER / "yolo11n.pt"),
         "best":    str(MODEL_FOLDER / "yolo11_fisheye_v5_best.pt"),
     }
-    DEFAULT_CONF      = float(os.getenv("YOLO_CONF", "0.35"))
-    DEFAULT_IOU       = float(os.getenv("YOLO_IOU", "0.45"))
-    DEFAULT_DEVICE    = os.getenv("COMPUTE_DEVICE", "cpu")  # "cpu" | "cuda:0" | "mps"
+    DEFAULT_CONF      = float(_env("YOLO_CONF", "FISHEYE_DEFAULT_CONF", default="0.35"))
+    DEFAULT_IOU       = float(_env("YOLO_IOU", "FISHEYE_DEFAULT_IOU", default="0.45"))
+    DEFAULT_DEVICE    = _env("COMPUTE_DEVICE", "FISHEYE_DEVICE", default="cpu")  # "cpu" | "cuda:0" | "mps"
 
     # ── Fisheye Defaults ─────────────────────────────────────
     FISHEYE_STRENGTH  = float(os.getenv("FISHEYE_STRENGTH", "0.6"))
@@ -64,6 +86,11 @@ class Config:
     EXT_CAM_LIMIT_GPU  = int(os.getenv("EXT_CAM_LIMIT_GPU", "4"))   # cameras in parallel (GPU)
     EXT_CAM_LIMIT_CPU  = int(os.getenv("EXT_CAM_LIMIT_CPU", "1"))   # cameras sequential (CPU)
 
+    # ── ALPR (Nhận diện biển số) trên feed live ──────────────
+    ALPR_LIVE_ENABLED = os.getenv("ALPR_LIVE_ENABLED", "true").lower() == "true"
+    ALPR_LIVE_EVERY   = int(os.getenv("ALPR_LIVE_EVERY", "3"))   # OCR mỗi N chu kỳ
+    ALPR_LIVE_MAX_VEH = int(os.getenv("ALPR_LIVE_MAX_VEH", "6")) # số crop tối đa/cam/chu kỳ
+
     # ── Speed Estimation ─────────────────────────────────────
     # px→m scale: 1px ≈ SPEED_SCALE_FACTOR metres (calibrate per camera)
     SPEED_SCALE_FACTOR = float(os.getenv("SPEED_SCALE_FACTOR", "0.05"))
@@ -71,12 +98,18 @@ class Config:
     # ── Alert Thresholds ─────────────────────────────────────
     ALERT_HIGH_DENSITY = int(os.getenv("ALERT_HIGH_DENSITY", "20"))  # xe/frame
 
+    # ── Speed Violation ──────────────────────────────────────
+    SPEED_LIMIT_KMH    = float(os.getenv("SPEED_LIMIT_KMH", "50.0"))
+
+    # ── Webhook ──────────────────────────────────────────────
+    WEBHOOK_URL        = os.getenv("WEBHOOK_URL", "")
+
     # ── Google Cloud Storage (optional) ─────────────────────
     GCS_BUCKET        = os.getenv("GCS_BUCKET", "")
     GCS_CREDENTIALS   = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
 
     # ── Recent Image Buffer ──────────────────────────────────
-    RECENT_IMAGE_LIMIT = 100
+    RECENT_IMAGE_LIMIT = int(_env("FISHEYE_RECENT_IMAGE_LIMIT", default="100"))
 
     # ── Vehicle Name Mapping ─────────────────────────────────
     # Map COCO class names → tiếng Việt / custom labels

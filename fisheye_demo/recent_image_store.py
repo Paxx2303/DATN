@@ -19,11 +19,11 @@ from config import Config
 logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
-_DB_PATH = str(Config.DB_PATH.parent / "recent_images.db")
+_DB_PATH = str(Config.RECENT_IMAGE_DB)
 
 
 def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(_DB_PATH, check_same_thread=False, timeout=15.0)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS recent_images (
             result_id  TEXT PRIMARY KEY,

@@ -20,6 +20,8 @@ from fisheye import apply_fisheye_to_cv2
 from speed_estimator import SpeedEstimator
 from congestion_detector import CongestionDetector
 from incident_detector import IncidentDetector
+from line_counter import LineCounter
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +99,18 @@ def run_video_detect(
         raise RuntimeError(f"Cannot open VideoWriter at {output_path}")
     
     # ── Khởi tạo analytics modules ───────────────────────────
-    speed_estimator = SpeedEstimator(fps=fps_src, scale_factor=0.05)
+    speed_estimator = SpeedEstimator(
+        fps=fps_src,
+        scale_factor=Config.SPEED_SCALE_FACTOR,
+        speed_limit_kmh=Config.SPEED_LIMIT_KMH,
+    )
     congestion = CongestionDetector(frame_width=width, frame_height=height)
-    
+    line_counter = LineCounter(camera_id=incident_camera_id)
+    congestion_result: dict = {}
+
     # ── Tracking state ────────────────────────────────────────
-    counts: dict[str, int] = {}          # Đếm xe theo loại
+    counts: dict[str, int] = {}          # Đếm xe theo loại (unique track)
+    seen_tracks: dict[int, str] = {}     # track_id → display_name (lần đầu xuất hiện)
     last_boxes: dict[int, tuple] = {}    # track_id → (x1,y1,x2,y2)
     last_labels: dict[int, str] = {}     # track_id → class_name
     preview_saved = False
@@ -160,17 +169,22 @@ def run_video_detect(
                         continue
                     
                     x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
-                    last_boxes[track_id]  = (x1, y1, x2, y2)
-                    last_labels[track_id] = name_map.get(cls_name, cls_name)
-                    
-                    # Đếm xe (chỉ đếm lần đầu xuất hiện track_id)
                     display_name = name_map.get(cls_name, cls_name)
-                    counts[display_name] = counts.get(display_name, 0)
-                    
-                    # Cập nhật speed estimator
+                    last_boxes[track_id]  = (x1, y1, x2, y2)
+                    last_labels[track_id] = display_name
+
+                    # Đếm unique: chỉ ghi nhận lần ĐẦU mỗi track_id xuất hiện
+                    if track_id not in seen_tracks:
+                        seen_tracks[track_id] = display_name
+
+                    # Cập nhật speed estimator và line counter
                     cx = (x1 + x2) // 2
                     cy = (y1 + y2) // 2
-                    speed_estimator.update(track_id, cx, cy, frame_idx, display_name)
+                    speed_estimator.update_single(track_id, cx, cy, frame_idx, display_name)
+                    line_counter.update(track_id, cx, cy, display_name, frame_idx, width, height)
+
+            # ── Congestion analysis (trên frame detect) ──────────
+            congestion_result = congestion.analyze(last_boxes)
         
         # ── Vẽ bounding boxes và labels ───────────────────────
         for track_id, (x1, y1, x2, y2) in last_boxes.items():
@@ -211,6 +225,15 @@ def run_video_detect(
                 cv2.putText(frame, inc["incident_type"], (x1, y1 - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         
+        # ── Draw virtual counting lines ───────────────────────
+        _LINE_BGR = {"north":(80,80,255),"south":(255,80,80),"east":(80,255,80),"west":(0,200,255)}
+        for direction, pts in line_counter.get_line_coords_pixel(width, height).items():
+            color = _LINE_BGR.get(direction, (255, 255, 255))
+            cv2.line(frame, pts["start"], pts["end"], color, 2)
+            mid = ((pts["start"][0]+pts["end"][0])//2, (pts["start"][1]+pts["end"][1])//2)
+            cv2.putText(frame, direction[0].upper(), mid,
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
         # ── Overlay: vehicle count ────────────────────────────
         total_count = len(last_boxes)
         cv2.putText(frame, f"Vehicles: {total_count}", (10, 30),
@@ -235,21 +258,30 @@ def run_video_detect(
     # ── Cleanup ───────────────────────────────────────────────
     cap.release()
     writer.release()
-    
-    # Đếm cuối: đếm unique track_ids theo loại
-    for label in last_labels.values():
+
+    # Đếm cuối: số track_id DUY NHẤT theo loại trong toàn bộ video
+    counts = {}
+    for label in seen_tracks.values():
         counts[label] = counts.get(label, 0) + 1
-    
+
     avg_speed = speed_estimator.get_average_speed()
     duration = time.time() - t_start
-    
+
     logger.info(f"Video processing done: {frame_idx} frames in {duration:.1f}s, counts={counts}")
-    
+
     return {
         "counts": counts,
+        "total_unique": len(seen_tracks),
         "avg_speed": round(avg_speed, 1),
+        "max_speed": speed_estimator.get_max_speed(),
         "incidents": incident_detector_inst.get_all_incidents() if incident_detector_inst else [],
+        "line_counter": line_counter.get_stats(),
+        "speed_violations": speed_estimator.get_violations(),
+        "congestion": congestion_result,
         "duration_s": round(duration, 2),
         "frame_count": frame_idx,
         "fps_processed": round(frame_idx / max(duration, 0.1), 1),
+        "resolution": f"{width}x{height}",
+        "detection_stride": stride,
+        "target_detect_fps": target_detect_fps,
     }

@@ -279,6 +279,12 @@ def start_monitor():
             "effect":   data.get("fisheye_effect", Config.FISHEYE_EFFECT),
         })
 
+    alpr_raw = data.get("alpr", data.get("alpr_enabled"))
+    if alpr_raw is None:
+        alpr_enabled = Config.ALPR_LIVE_ENABLED
+    else:
+        alpr_enabled = str(alpr_raw).lower() in ("1", "true", "yes", "on")
+
     status = camera_monitor.start(
         source_mode    = data.get("source_mode", "snapshot"),
         source_url     = source_url,
@@ -290,6 +296,8 @@ def start_monitor():
         model_key      = data.get("model_key", Config.DEFAULT_MODEL_KEY),
         interval_seconds = interval,
         compute_mode   = device,
+        alpr_enabled   = alpr_enabled,
+        alpr_every     = int(data.get("alpr_every", Config.ALPR_LIVE_EVERY)),
     )
     
     return jsonify({"message": "Monitor started", "status": status}), 200

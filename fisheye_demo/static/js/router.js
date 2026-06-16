@@ -11,7 +11,9 @@ class PageRouter {
       streams: "Camera ngoài (Live Streams)",
       history: "Lịch sử Inference (History)",
       logs: "Nhật ký hệ thống (Logs)",
-      settings: "Cấu hình hệ thống (Settings)"
+      settings: "Cấu hình hệ thống (Settings)",
+      toc: "Trung tâm Điều hành Giao thông (TOC)",
+      alpr: "Nhận diện biển số (ALPR)",
     };
   }
 

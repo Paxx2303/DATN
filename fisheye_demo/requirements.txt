@@ -27,6 +27,11 @@ google-cloud-storage>=2.18.2
 beautifulsoup4>=4.12.3
 lxml>=5.3.0
 
+# --- ALPR / Nhận diện biển số (optional) ---
+# Tự tải model OCR ở lần chạy đầu (cần internet). Nếu thiếu, feature ALPR
+# tự tắt (degrade gracefully), phần còn lại của hệ thống vẫn chạy bình thường.
+easyocr>=1.7.1
+
 # --- Utilities ---
 python-dotenv>=1.0.1
 tqdm>=4.66.5

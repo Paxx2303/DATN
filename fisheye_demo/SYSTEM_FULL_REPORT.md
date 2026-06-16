@@ -1,4 +1,6 @@
-﻿# Fisheye Demo System - Báo Cáo Hệ Thống Chi Tiết
+﻿> ⚠️ **TÀI LIỆU CŨ.** Nguồn chuẩn & cập nhật là [`HE_THONG.md`](HE_THONG.md). File này giữ lại để tham khảo lịch sử.
+
+# Fisheye Demo System - Báo Cáo Hệ Thống Chi Tiết
 
 ## 1. Tổng Quan Hệ Thống
 

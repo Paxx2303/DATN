@@ -91,6 +91,27 @@ class HeatmapAccumulator:
             "total_updates": self._total_updates,
         }
 
+    def to_base64_jpeg(self, width: int = 640, height: int = 480) -> str:
+        """Render heatmap thành JPEG base64 string."""
+        import base64
+        import io as _io
+        img = self.get_heatmap_image(width=width, height=height)
+        # Chuyển RGBA → RGB (JPEG không hỗ trợ alpha)
+        rgb = Image.new("RGB", img.size, (0, 0, 0))
+        rgb.paste(img, mask=img.split()[3])
+        buf = _io.BytesIO()
+        rgb.save(buf, format="JPEG", quality=85)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+    def get_stats(self) -> dict:
+        """Trả về thống kê tóm tắt của heatmap."""
+        with self._lock:
+            return {
+                "total_updates": self._total_updates,
+                "max_value": float(self._grid.max()),
+                "nonzero_cells": int(np.count_nonzero(self._grid)),
+            }
+
 
 def _apply_heat_colormap(grid: np.ndarray, alpha: float) -> np.ndarray:
     """
@@ -166,7 +187,65 @@ class TrafficDensityAnalyzer:
                 "trend":   trend,
             }
 
+    def get_summary(self) -> dict:
+        """Alias cho get_stats() — tương thích với routes_extended.py."""
+        return self.get_stats()
+
 
 # Singleton instances
 heatmap = HeatmapAccumulator()
 density_analyzer = TrafficDensityAnalyzer()
+
+
+# ── Module-level helper functions ────────────────────────────────────────────
+
+def build_analytics_from_db(hours: int = 24) -> dict:
+    """
+    Tổng hợp analytics từ DB cho khoảng thời gian `hours` gần nhất.
+    """
+    try:
+        import db as database
+        chart = database.get_hourly_traffic_chart(hours=hours)
+        class_dist = database.get_class_distribution(hours=hours)
+        recent_alerts = database.get_recent_alerts(limit=20)
+    except Exception as exc:
+        logger.warning("build_analytics_from_db: DB error: %s", exc)
+        chart = []
+        class_dist = {}
+        recent_alerts = []
+
+    total = sum(class_dist.values())
+    return {
+        "hours":            hours,
+        "total_detections": total,
+        "class_distribution": class_dist,
+        "hourly_chart":     chart,
+        "recent_alerts":    recent_alerts,
+    }
+
+
+def compute_class_percentages(dist: dict) -> dict:
+    """Tính % của mỗi class trong tổng."""
+    total = sum(dist.values())
+    if total == 0:
+        return {k: 0.0 for k in dist}
+    return {k: round(v / total * 100, 1) for k, v in dist.items()}
+
+
+def detect_peak_hours(chart: list, top_n: int = 3) -> list:
+    """
+    Tìm top_n giờ cao điểm từ hourly chart.
+
+    Parameters
+    ----------
+    chart : list[{"hour": str, "counts": {class: N}}]
+    top_n : số giờ trả về
+    """
+    if not chart:
+        return []
+    scored = []
+    for bucket in chart:
+        total = sum(bucket.get("counts", {}).values())
+        scored.append({"hour": bucket.get("hour", ""), "total": total})
+    scored.sort(key=lambda x: x["total"], reverse=True)
+    return scored[:top_n]

@@ -6,10 +6,12 @@ import { router } from './router.js';
 import { appState } from './state/appState.js';
 import { ApiService } from './services/api.js';
 import { elements, setToast, setLoading, updateControlLabels } from './components/Layout.js';
-import { initDashboard, renderLegend, loadStats } from './components/Dashboard.js';
+import { initDashboard, renderLegend, loadStats, loadDashboardExtras } from './components/Dashboard.js';
 import { initWorkspace, renderPlaceholder, loadExampleIntoWorkspace } from './components/Workspace.js';
 import { initLiveStreams, loadExternalCamera, loadExternalCameraLiveStatus } from './components/LiveStreams.js';
 import { initLogsTerminal, loadLogs } from './components/LogsTerminal.js';
+import { initTOC, startTOCPolling, stopTOCPolling, loadTOCHeatmap } from './components/TOC.js';
+import { initALPR, loadAlprHistory } from './components/ALPR.js';
 
 // Expose navigation to the global scope for the inline onclick handlers in HTML
 window.nav = function(pageId) {
@@ -119,6 +121,18 @@ router.onNavigate((pageId) => {
   if (pageId === "streams") {
     loadExternalCameraLiveStatus(true);
   }
+  if (pageId === "toc") {
+    startTOCPolling();
+    loadTOCHeatmap();
+  } else {
+    stopTOCPolling();
+  }
+  if (pageId === "dash") {
+    loadDashboardExtras();
+  }
+  if (pageId === "alpr") {
+    loadAlprHistory();
+  }
 });
 
 /**
@@ -140,11 +154,14 @@ async function boot() {
   renderPlaceholder(elements.preprocessedMedia, "If preprocessing is enabled, the warped fisheye output will appear here.");
   renderPlaceholder(elements.resultMedia, "Detection annotations or converted fisheye video will appear here.");
 
-  // Initialize page-level controllers
-  initDashboard(config.classColors);
-  initWorkspace(config.classNames, config.classColors, onJobCompleted);
-  initLiveStreams(config.classNames, config.classColors, onJobCompleted);
-  initLogsTerminal();
+  // Initialize page-level controllers (each wrapped so one failure doesn't block navigation)
+  const _tryInit = (label, fn) => { try { fn(); } catch (e) { console.error(`[boot] init ${label} failed:`, e); } };
+  _tryInit("Dashboard",      () => initDashboard(config.classColors));
+  _tryInit("Workspace",      () => initWorkspace(config.classNames, config.classColors, onJobCompleted));
+  _tryInit("LiveStreams",    () => initLiveStreams(config.classNames, config.classColors, onJobCompleted));
+  _tryInit("LogsTerminal",   () => initLogsTerminal());
+  _tryInit("TOC",            () => initTOC());
+  _tryInit("ALPR",           () => initALPR());
 
   // Bind History refresh click
   if (elements.refreshHistory) {
@@ -162,6 +179,7 @@ async function boot() {
     
     // Auto-load default external camera source on startup
     await loadExternalCamera(config.externalCameraUrl);
+    await loadDashboardExtras();
   } catch (error) {
     setToast(`Failed to load system metadata on boot: ${error.message}`);
   }

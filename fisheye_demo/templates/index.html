@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FishEye8K Intelligent Traffic Control</title>
+  <link rel="icon" href="data:,">  <!-- suppress favicon 404 -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -54,6 +55,13 @@
       <div class="sicon" id="side-btn-logs" onclick="nav('logs')" title="System Logs">
         <i class="ti ti-terminal-2"></i>
       </div>
+      <div class="sicon" id="side-btn-toc" onclick="nav('toc')" title="TOC Dashboard" style="position:relative;">
+        <i class="ti ti-building-skyscraper"></i>
+        <span id="toc-sidebar-badge" style="display:none; position:absolute; top:4px; right:4px; background:#ef4444; color:#fff; font-size:9px; font-weight:700; border-radius:9px; padding:1px 5px; min-width:16px; text-align:center;"></span>
+      </div>
+      <div class="sicon" id="side-btn-alpr" onclick="nav('alpr')" title="Nhận diện biển số">
+        <i class="ti ti-license"></i>
+      </div>
       <div class="sicon" id="side-btn-settings" onclick="nav('settings')" title="Settings">
         <i class="ti ti-settings"></i>
       </div>
@@ -82,6 +90,8 @@
         <div class="ptab" id="tab-btn-streams" onclick="nav('streams')">Live Streams</div>
         <div class="ptab" id="tab-btn-history" onclick="nav('history')">Run History</div>
         <div class="ptab" id="tab-btn-logs" onclick="nav('logs')">System Logs</div>
+        <div class="ptab" id="tab-btn-toc" onclick="nav('toc')">TOC</div>
+        <div class="ptab" id="tab-btn-alpr" onclick="nav('alpr')">Biển số (ALPR)</div>
         <div class="ptab" id="tab-btn-settings" onclick="nav('settings')">Settings</div>
       </div>
 
@@ -150,6 +160,57 @@
               <canvas id="class-chart" width="560" height="240"
                 style="width:100%; height:auto; display:block;"></canvas>
             </div>
+          </div>
+        </div>
+
+        <!-- Alerts + Incidents + Speed Violations -->
+        <div class="grid2" style="margin-top:20px;">
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <div class="sec" style="margin-bottom:0;"><i class="ti ti-bell-ringing"></i> Cảnh báo gần đây</div>
+              <button id="dash-refresh-alerts" class="btn btn-sm">↻</button>
+            </div>
+            <div id="dash-alerts-list" style="display:flex; flex-direction:column; gap:4px;">
+              <div style="font-size:11px; color:var(--color-text-tertiary); padding:8px 0;">Đang tải...</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <div class="sec" style="margin-bottom:0;"><i class="ti ti-alert-triangle"></i> Sự cố & Vi phạm 24h</div>
+              <button id="dash-refresh-incidents" class="btn btn-sm">↻</button>
+            </div>
+            <div class="grid2" style="margin-bottom:12px; gap:8px;">
+              <div class="metric" style="padding:10px;">
+                <div class="metric-label">Tổng sự cố</div>
+                <div class="metric-val" id="dash-incidents-total" style="font-size:22px;">—</div>
+                <div id="dash-incident-badge" class="badge b-gray" style="margin-top:4px;">—</div>
+              </div>
+              <div class="metric" style="padding:10px;">
+                <div class="metric-label">Vi phạm tốc độ</div>
+                <div class="metric-val" id="dash-violations-count" style="font-size:22px;">—</div>
+                <div class="metric-sub">24 giờ qua</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+              <span class="badge b-red" style="font-size:9.5px;">Ngược chiều <span id="dash-inc-wrong_way">0</span></span>
+              <span class="badge b-orange" style="font-size:9.5px;">Chặn làn <span id="dash-inc-stopped_vehicle">0</span></span>
+              <span class="badge b-amber" style="font-size:9.5px;">Đỗ sai <span id="dash-inc-illegal_parking">0</span></span>
+            </div>
+            <div style="font-size:10.5px; font-weight:600; color:var(--color-text-secondary); margin-bottom:6px;">Vi phạm tốc độ gần nhất</div>
+            <table style="width:100%; border-collapse:collapse; font-size:10.5px;">
+              <thead>
+                <tr style="color:var(--color-text-tertiary); font-size:9.5px; text-transform:uppercase;">
+                  <th style="padding:4px 6px; text-align:left;">Track</th>
+                  <th style="padding:4px 6px; text-align:left;">Loại xe</th>
+                  <th style="padding:4px 6px; text-align:left;">Tốc độ</th>
+                  <th style="padding:4px 6px; text-align:left;">Giờ</th>
+                </tr>
+              </thead>
+              <tbody id="dash-violations-tbody">
+                <tr><td colspan="4" style="font-size:10.5px; color:var(--color-text-tertiary); padding:8px;">Không có dữ liệu.</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -262,7 +323,7 @@
               </div>
 
               <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
-                <button class="btn btn-p" id="detect-btn" disabled><i class="ti ti-scan"></i> Detect objects</button>
+                <button class="btn btn-p" id="detect-btn" disabled><i class="ti ti-scan"></i> Detect objects (ảnh tự chạy khi upload)</button>
                 <button class="btn" id="convert-btn" disabled><i class="ti ti-arrows-minimize"></i> Convert to fisheye</button>
                 <button class="btn" id="clear-btn" type="button"><i class="ti ti-trash"></i> Clear</button>
               </div>
@@ -343,6 +404,12 @@
                 </div>
                 <input id="external-camera-live-interval" type="hidden"
                   value="{{ "%.1f"|format(external_camera_live_interval_seconds) }}">
+                <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer;">
+                  <input id="external-camera-alpr" type="checkbox" checked
+                    style="width:auto; cursor:pointer;">
+                  <span><i class="ti ti-license" style="color:var(--color-text-info);"></i>
+                    Nhận diện biển số (ALPR) trên live</span>
+                </label>
               </div>
 
               <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
@@ -412,6 +479,17 @@
               </div>
             </div>
 
+            <!-- Live ALPR plates panel -->
+            <div class="card" id="live-alpr-panel" style="display:none;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div class="sec" style="margin-bottom:0;"><i class="ti ti-license"></i> Biển số nhận diện (Live)</div>
+                <span class="badge b-amber" style="font-size:10px;">Tổng phiên: <strong id="live-alpr-total">0</strong></span>
+              </div>
+              <div id="live-alpr-list" style="display:flex; flex-wrap:wrap; gap:6px;">
+                <div style="font-size:11px; color:var(--color-text-tertiary);">Chưa có biển số nào từ feed live.</div>
+              </div>
+            </div>
+
             <div class="card">
               <div class="sec"><i class="ti ti-grid-dots"></i> Camera Detections Grid
                 <span style="margin-left:auto; font-size:9px; color:var(--color-text-tertiary); font-weight:400; text-transform:none; letter-spacing:0;">
@@ -470,6 +548,192 @@
                 style="font-family:var(--font-mono); font-size:10px;">loading</span></div>
             <div class="df"><span class="df-l">Model Source Mode</span><span class="df-v" id="model-source">loading</span></div>
           </div>
+        </div>
+      </div>
+
+      <!-- Page 7: TOC Dashboard -->
+      <div class="page" id="page-toc">
+        <!-- Summary Cards -->
+        <div class="grid4" style="margin-bottom:16px;">
+          <div class="metric">
+            <div class="metric-label">Tổng đối tượng (24h)</div>
+            <div class="metric-val" id="toc-total-detections">—</div>
+            <div class="metric-sub">Tổng detect từ tất cả nguồn</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Mật độ hiện tại</div>
+            <div class="metric-val" id="toc-current-density">—</div>
+            <div style="margin-top:4px;"><span id="toc-density-trend" class="badge b-gray">—</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Sự cố chưa xử lý</div>
+            <div class="metric-val" id="toc-incidents-unack" style="color:var(--color-text-danger);">—</div>
+            <div class="metric-sub">Tổng 24h: <span id="toc-incidents-total">—</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Vi phạm tốc độ (24h)</div>
+            <div class="metric-val" id="toc-violations-total">—</div>
+            <div class="metric-sub">Max: <span id="toc-violations-max-speed">—</span></div>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-bottom:16px;">
+          <!-- Incident Stats -->
+          <div class="card">
+            <div class="sec"><i class="ti ti-alert-triangle"></i> Thống kê sự cố 24h</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+              <span class="badge b-red">Ngược chiều: <strong id="toc-incidents-wrong-way">0</strong></span>
+              <span class="badge b-orange">Chặn làn: <strong id="toc-incidents-stopped">0</strong></span>
+              <span class="badge b-amber">Đỗ sai: <strong id="toc-incidents-parking">0</strong></span>
+            </div>
+            <div style="font-size:11px; color:var(--color-text-tertiary);">Đỉnh mật độ: <span id="toc-peak-density" style="font-weight:600; color:var(--color-text-primary);">—</span></div>
+          </div>
+
+          <!-- Heatmap -->
+          <div class="card" style="text-align:center;">
+            <div class="sec" style="text-align:left;"><i class="ti ti-map-2"></i> Heatmap mật độ (<span id="toc-heatmap-updates">0</span> updates)</div>
+            <img id="toc-heatmap-img" src="" alt="Heatmap" style="width:100%; border-radius:8px; background:var(--color-background-secondary); min-height:120px; object-fit:cover;">
+          </div>
+        </div>
+
+        <!-- Violations Table -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="sec"><i class="ti ti-gauge"></i> Vi phạm tốc độ gần nhất (24h)</div>
+          <table style="width:100%; border-collapse:collapse; font-size:10.5px;">
+            <thead>
+              <tr style="color:var(--color-text-tertiary); font-size:9.5px; text-transform:uppercase;">
+                <th style="padding:6px 8px; text-align:left;">Camera</th>
+                <th style="padding:6px 8px; text-align:left;">Track</th>
+                <th style="padding:6px 8px; text-align:left;">Loại xe</th>
+                <th style="padding:6px 8px; text-align:left;">Tốc độ</th>
+                <th style="padding:6px 8px; text-align:left;">Giới hạn / Vượt</th>
+                <th style="padding:6px 8px; text-align:left;">Thời gian</th>
+              </tr>
+            </thead>
+            <tbody id="toc-violations-tbody">
+              <tr><td colspan="6" style="text-align:center; color:var(--color-text-tertiary); padding:16px;">Không có dữ liệu.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Alerts Table -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div class="sec" style="margin-bottom:0;"><i class="ti ti-bell-ringing"></i> Cảnh báo tổng hợp</div>
+            <button id="toc-refresh-btn" class="btn btn-sm">↻ Làm mới</button>
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:10.5px;">
+            <thead>
+              <tr style="color:var(--color-text-tertiary); font-size:9.5px; text-transform:uppercase;">
+                <th style="padding:6px 8px; text-align:left;">Loại</th>
+                <th style="padding:6px 8px; text-align:left;">Camera</th>
+                <th style="padding:6px 8px; text-align:left;">Thông báo</th>
+                <th style="padding:6px 8px; text-align:left;">Thời gian</th>
+                <th style="padding:6px 8px; text-align:left;">Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="toc-alerts-tbody">
+              <tr><td colspan="5" style="text-align:center; color:var(--color-text-tertiary); padding:16px;">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Export & Webhook -->
+        <div class="card">
+          <div class="sec"><i class="ti ti-download"></i> Xuất báo cáo & Webhook</div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <select id="toc-export-hours" style="padding:6px 10px; font-size:12px; border-radius:var(--border-radius-sm);">
+              <option value="24">24 giờ</option>
+              <option value="48">48 giờ</option>
+              <option value="168">7 ngày</option>
+            </select>
+            <button id="toc-export-csv-btn" class="btn btn-sm"><i class="ti ti-file-spreadsheet"></i> Traffic CSV</button>
+            <button id="toc-export-incidents-btn" class="btn btn-sm"><i class="ti ti-file-alert"></i> Incidents CSV</button>
+            <button id="toc-export-violations-btn" class="btn btn-sm"><i class="ti ti-file-x"></i> Violations CSV</button>
+            <button id="toc-export-json-btn" class="btn btn-sm"><i class="ti ti-file-code"></i> Full JSON Report</button>
+            <button id="toc-test-webhook-btn" class="btn btn-sm">Test Webhook</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page: ALPR — Nhận diện biển số -->
+      <div class="page" id="page-alpr">
+        <div class="grid4" style="margin-bottom:16px;">
+          <div class="metric">
+            <div class="metric-label">Tổng biển số (24h)</div>
+            <div class="metric-val" id="alpr-total">—</div>
+            <div class="metric-sub">Đã nhận diện & lưu DB</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Trạng thái OCR</div>
+            <div class="metric-val" id="alpr-status" style="font-size:18px;">—</div>
+            <div class="metric-sub">Engine EasyOCR</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Biển ở lần chạy gần nhất</div>
+            <div class="metric-val" id="alpr-last-count">—</div>
+            <div class="metric-sub">Số xe: <span id="alpr-last-vehicles">—</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Định dạng hỗ trợ</div>
+            <div class="metric-val" style="font-size:16px;">Biển VN</div>
+            <div class="metric-sub">vd: 51F-123.45</div>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-bottom:16px;">
+          <!-- Upload & Detect -->
+          <div class="card">
+            <div class="sec"><i class="ti ti-upload"></i> Nhận diện biển số từ ảnh</div>
+            <input type="file" id="alpr-file" accept="image/*"
+                   style="font-size:12px; margin-bottom:10px;" />
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+              <label style="font-size:11px; color:var(--color-text-tertiary);">Conf
+                <input type="number" id="alpr-conf" value="0.25" min="0.05" max="0.95" step="0.05"
+                       style="width:62px; padding:4px 6px; font-size:12px;" />
+              </label>
+              <button id="alpr-detect-btn" class="btn btn-sm"><i class="ti ti-scan"></i> Nhận diện</button>
+            </div>
+            <div id="alpr-result-media" style="min-height:140px; background:var(--color-background-secondary); border-radius:8px; display:flex; align-items:center; justify-content:center; color:var(--color-text-tertiary); font-size:12px;">
+              Ảnh kết quả sẽ hiển thị tại đây.
+            </div>
+            <div id="alpr-result-list" style="margin-top:10px;"></div>
+          </div>
+
+          <!-- Search -->
+          <div class="card">
+            <div class="sec"><i class="ti ti-search"></i> Tra cứu biển số</div>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <input type="text" id="alpr-search-input" placeholder="Nhập biển số (vd: 51F)"
+                     class="form-control" style="flex:1; padding:6px 12px; font-size:12px;" />
+              <button id="alpr-search-btn" class="btn btn-sm">Tìm</button>
+            </div>
+            <div id="alpr-search-result" style="font-size:11px; color:var(--color-text-tertiary);">
+              Nhập từ khoá để tra cứu trong lịch sử.
+            </div>
+          </div>
+        </div>
+
+        <!-- History Table -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div class="sec" style="margin-bottom:0;"><i class="ti ti-list"></i> Lịch sử biển số (24h)</div>
+            <button id="alpr-refresh-btn" class="btn btn-sm">↻ Làm mới</button>
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:11px;">
+            <thead>
+              <tr style="color:var(--color-text-tertiary); font-size:9.5px; text-transform:uppercase;">
+                <th style="padding:6px 8px; text-align:left;">Biển số</th>
+                <th style="padding:6px 8px; text-align:left;">Độ tin cậy</th>
+                <th style="padding:6px 8px; text-align:left;">Loại xe</th>
+                <th style="padding:6px 8px; text-align:left;">Nguồn</th>
+                <th style="padding:6px 8px; text-align:left;">Thời gian</th>
+              </tr>
+            </thead>
+            <tbody id="alpr-history-tbody">
+              <tr><td colspan="5" style="text-align:center; color:var(--color-text-tertiary); padding:16px;">Đang tải...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 

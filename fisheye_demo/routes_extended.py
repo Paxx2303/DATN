@@ -264,21 +264,136 @@ def register_extended_routes(
 
     @app.post("/api/line-counter/config")
     def api_line_counter_config():
-        """Cấu hình lại đường kẻ."""
+        """Cấu hình lại 4 vạch đếm."""
         if line_counter is None:
             return jsonify({"error": "Line counter chưa được cấu hình"}), 400
         data = request.get_json(silent=True) or {}
+        lines = data.get("lines", {})
+        if not lines:
+            return jsonify({"error": "Cần truyền 'lines' object với các hướng"}), 400
         try:
-            x1 = float(data.get("x1", 0.0))
-            y1 = float(data.get("y1", 0.5))
-            x2 = float(data.get("x2", 1.0))
-            y2 = float(data.get("y2", 0.5))
-            line_counter.line_start = (x1, y1)
-            line_counter.line_end = (x2, y2)
-            line_counter.reset()
-            return jsonify({"status": "ok", "line_start": (x1, y1), "line_end": (x2, y2)})
+            line_counter.set_lines(lines)
+            return jsonify({"status": "ok", "lines": line_counter.get_stats()["lines"]})
         except (TypeError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 400
+
+    @app.get("/api/line-counter/history")
+    def api_line_counter_history():
+        hours = _parse_int(request.args.get("hours"), default=24, minimum=1, maximum=168)
+        camera_id = request.args.get("camera_id") or None
+        try:
+            try:
+                from db import get_traffic_counts, get_traffic_by_direction
+            except ImportError:
+                from fisheye_demo.db import get_traffic_counts, get_traffic_by_direction
+            counts = get_traffic_counts(hours=hours, camera_id=camera_id)
+            by_direction = get_traffic_by_direction(hours=hours, camera_id=camera_id)
+            return jsonify({
+                "hours": hours,
+                "by_direction": by_direction,
+                "raw": counts,
+            })
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    # ── Incidents ────────────────────────────────────────────────────────────
+
+    @app.get("/api/incidents")
+    def api_incidents_list():
+        hours = _parse_int(request.args.get("hours"), default=24, minimum=1, maximum=168)
+        ack_param = request.args.get("acknowledged")
+        acknowledged = None
+        if ack_param in ("0", "false"):
+            acknowledged = False
+        elif ack_param in ("1", "true"):
+            acknowledged = True
+        incident_type = request.args.get("type") or None
+        try:
+            try:
+                from db import get_incidents, count_incidents
+            except ImportError:
+                from fisheye_demo.db import get_incidents, count_incidents
+            items = get_incidents(hours=hours, acknowledged=acknowledged,
+                                  incident_type=incident_type)
+            stats = count_incidents(hours=hours)
+            return jsonify({
+                "incidents": items,
+                "total": len(items),
+                "stats_by_type": stats,
+                "hours": hours,
+            })
+        except Exception as exc:
+            logger.error("api_incidents_list error: %s", exc)
+            return jsonify({"error": str(exc)}), 500
+
+    @app.post("/api/incidents/<int:incident_id>/acknowledge")
+    def api_incident_acknowledge(incident_id: int):
+        try:
+            try:
+                from db import acknowledge_incident
+            except ImportError:
+                from fisheye_demo.db import acknowledge_incident
+            acknowledge_incident(incident_id)
+            return jsonify({"status": "ok", "incident_id": incident_id})
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    @app.get("/api/incidents/stats")
+    def api_incidents_stats():
+        hours = _parse_int(request.args.get("hours"), default=24, minimum=1, maximum=168)
+        try:
+            try:
+                from db import count_incidents
+            except ImportError:
+                from fisheye_demo.db import count_incidents
+            stats = count_incidents(hours=hours)
+            unack = count_incidents(hours=hours, acknowledged=False)
+            return jsonify({
+                "hours": hours,
+                "by_type": stats,
+                "total": sum(stats.values()),
+                "unacknowledged": sum(unack.values()),
+            })
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    # ── Speed Violations ─────────────────────────────────────────────────────
+
+    @app.get("/api/speed/violations")
+    def api_speed_violations():
+        hours = _parse_int(request.args.get("hours"), default=24, minimum=1, maximum=168)
+        camera_id = request.args.get("camera_id") or None
+        try:
+            try:
+                from db import get_speed_violations, count_speed_violations
+            except ImportError:
+                from fisheye_demo.db import get_speed_violations, count_speed_violations
+            items = get_speed_violations(hours=hours, camera_id=camera_id)
+            total = count_speed_violations(hours=hours)
+            return jsonify({
+                "violations": items,
+                "total": total,
+                "hours": hours,
+            })
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    @app.get("/api/speed/config-limit")
+    def api_speed_config_get():
+        try:
+            from config import Config
+            return jsonify({
+                "speed_limit_kmh": getattr(Config, "SPEED_LIMIT_KMH", 50.0),
+            })
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    # ── Webhook Test ─────────────────────────────────────────────────────────
+
+    @app.post("/api/alerts/webhook/test")
+    def api_webhook_test():
+        result = alert_manager.test_webhook()
+        return jsonify(result)
 
     # ── Detections from DB ───────────────────────────────────────────────────
 
@@ -337,27 +452,50 @@ def register_extended_routes(
     @app.get("/api/export/csv")
     def api_export_csv():
         hours = _parse_int(request.args.get("hours"), default=24, minimum=1, maximum=168)
+        sheet = request.args.get("sheet", "traffic")  # traffic | incidents | violations
         try:
             try:
-                from db import get_hourly_traffic_chart, get_class_distribution
+                from db import (get_hourly_traffic_chart, get_class_distribution,
+                                get_incidents, get_speed_violations, get_traffic_by_direction)
             except ImportError:
-                from fisheye_demo.db import get_hourly_traffic_chart, get_class_distribution
-
-            chart = get_hourly_traffic_chart(hours=hours)
-            class_names = ["Car", "Bus", "Truck", "Pedestrian", "Motorbike"]
+                from fisheye_demo.db import (get_hourly_traffic_chart, get_class_distribution,
+                                              get_incidents, get_speed_violations, get_traffic_by_direction)
 
             output = io.StringIO()
             writer = csv.writer(output)
-            writer.writerow(["Hour", "Total"] + class_names)
 
-            for bucket in chart:
-                counts = bucket.get("counts", {})
-                total = sum(counts.values())
-                row = [bucket.get("hour", ""), total] + [counts.get(cls, 0) for cls in class_names]
-                writer.writerow(row)
+            if sheet == "incidents":
+                writer.writerow(["ID", "Camera", "Type", "Severity", "Track ID",
+                                  "Vehicle", "Description", "Acknowledged", "Time"])
+                for inc in get_incidents(hours=hours):
+                    writer.writerow([
+                        inc["id"], inc["camera_id"], inc["incident_type"],
+                        inc["severity"], inc["track_id"], inc["vehicle_type"],
+                        inc["description"], inc["acknowledged"], inc["occurred_at"]
+                    ])
+            elif sheet == "violations":
+                writer.writerow(["ID", "Camera", "Track ID", "Vehicle",
+                                  "Speed (km/h)", "Limit (km/h)", "Excess (km/h)", "Time"])
+                for v in get_speed_violations(hours=hours):
+                    excess = round(v["speed_kmh"] - v["limit_kmh"], 1)
+                    writer.writerow([
+                        v["id"], v["camera_id"], v["track_id"], v["vehicle_type"],
+                        v["speed_kmh"], v["limit_kmh"], excess, v["created_at"]
+                    ])
+            else:
+                # Default: traffic hourly chart
+                chart = get_hourly_traffic_chart(hours=hours)
+                class_names = ["Car", "Bus", "Truck", "Pedestrian", "Motorbike"]
+                writer.writerow(["Hour", "Total"] + class_names)
+                for bucket in chart:
+                    counts = bucket.get("counts", {})
+                    total = sum(counts.values())
+                    row = [bucket.get("hour", ""), total] + [counts.get(cls, 0) for cls in class_names]
+                    writer.writerow(row)
 
             csv_content = output.getvalue()
-            filename = f"traffic_stats_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+            ts = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+            filename = f"fisheye8k_{sheet}_{ts}.csv"
 
             return Response(
                 csv_content,
@@ -373,12 +511,24 @@ def register_extended_routes(
         try:
             try:
                 from analytics import build_analytics_from_db
+                from db import (get_incidents, count_incidents,
+                                get_speed_violations, count_speed_violations,
+                                get_traffic_by_direction)
             except ImportError:
                 from fisheye_demo.analytics import build_analytics_from_db
+                from fisheye_demo.db import (get_incidents, count_incidents,
+                                              get_speed_violations, count_speed_violations,
+                                              get_traffic_by_direction)
             data = build_analytics_from_db(hours=hours)
-            filename = f"analytics_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+            data["incidents"] = get_incidents(hours=hours)
+            data["incidents_stats"] = count_incidents(hours=hours)
+            data["speed_violations"] = get_speed_violations(hours=hours)
+            data["speed_violations_total"] = count_speed_violations(hours=hours)
+            data["traffic_by_direction"] = get_traffic_by_direction(hours=hours)
+            data["line_counter_live"] = line_counter.get_stats() if line_counter else {}
+            filename = f"fisheye8k_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
             return Response(
-                json.dumps(data, ensure_ascii=False, indent=2),
+                json.dumps(data, ensure_ascii=False, indent=2, default=str),
                 mimetype="application/json",
                 headers={"Content-Disposition": f"attachment; filename={filename}"},
             )
@@ -710,6 +860,143 @@ def register_extended_routes(
             })
         except Exception as exc:
             logger.error("api_congestion_detect_image error: %s", exc)
+            return jsonify({"error": str(exc)}), 500
+
+    # ── ALPR — Nhận diện biển số ──────────────────────────────────────────────
+
+    @app.post("/api/alpr/detect")
+    def api_alpr_detect():
+        """
+        Nhận diện biển số trên 1 ảnh.
+        Form fields: image (hoặc file), conf, iou.
+        """
+        from flask import request as req
+        img_file = req.files.get("image") or req.files.get("file")
+        if img_file is None:
+            return jsonify({"error": "Cần upload ảnh"}), 400
+
+        try:
+            from alpr import plate_recognizer, annotate_plates_on_frame
+        except ImportError:
+            from fisheye_demo.alpr import plate_recognizer, annotate_plates_on_frame
+
+        if not plate_recognizer.is_available():
+            return jsonify({
+                "available": False,
+                "message": "ALPR chưa sẵn sàng — hãy cài 'easyocr' và đảm bảo tải được model OCR.",
+                "plates": [], "total": 0,
+            }), 200
+
+        try:
+            conf_val = float(req.form.get("conf", 0.25))
+            iou_val = float(req.form.get("iou", 0.45))
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": f"Tham số không hợp lệ: {exc}"}), 400
+
+        try:
+            import uuid as _uuid
+            import base64
+            import io as _io
+            import numpy as np
+            import cv2
+            from PIL import Image as PILImage
+
+            try:
+                from config import Config
+                import db as database
+            except ImportError:
+                from fisheye_demo.config import Config
+                from fisheye_demo import db as database
+
+            img = PILImage.open(img_file.stream).convert("RGB")
+            bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+            # Phát hiện phương tiện bằng model sẵn có
+            model, model_info = registry.load()
+            result = model.predict(source=bgr, conf=conf_val, iou=iou_val,
+                                   verbose=False, device=settings.device)[0]
+            names = getattr(getattr(model, "model", None), "names", None) or {}
+            NAME_MAP = {
+                "car": "Car", "bus": "Bus", "truck": "Truck",
+                "person": "Pedestrian", "pedestrian": "Pedestrian",
+                "motorcycle": "Motorbike", "motorbike": "Motorbike",
+            }
+            VEHICLE = {"Car", "Bus", "Truck", "Motorbike"}
+            vehicle_boxes = []
+            if result.boxes is not None:
+                for box in result.boxes:
+                    x1, y1, x2, y2 = (int(v) for v in box.xyxy[0].tolist())
+                    raw = str(names.get(int(box.cls[0]), ""))
+                    cls = NAME_MAP.get(raw.lower(), raw)
+                    if cls in VEHICLE:
+                        vehicle_boxes.append({"bbox": [x1, y1, x2, y2],
+                                              "vehicle_type": cls})
+
+            # OCR biển số (fallback toàn ảnh nếu không có xe)
+            plates = plate_recognizer.recognize(bgr, vehicle_boxes or None)
+
+            # Lưu DB
+            detection_id = _uuid.uuid4().hex
+            for p in plates:
+                try:
+                    database.save_license_plate(
+                        plate_text=p["plate"], confidence=p["confidence"],
+                        vehicle_type=p.get("vehicle_type", "unknown"),
+                        camera_id="upload", detection_id=detection_id,
+                        bbox=p.get("bbox", []),
+                    )
+                except Exception as exc:
+                    logger.warning("save_license_plate failed: %s", exc)
+
+            # Annotate
+            annotate_plates_on_frame(bgr, plates)
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+            buf = _io.BytesIO()
+            PILImage.fromarray(rgb).save(buf, format="JPEG", quality=90)
+            b64 = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+            return jsonify({
+                "available": True,
+                "annotated_image": b64,
+                "plates": plates,
+                "total": len(plates),
+                "vehicles_detected": len(vehicle_boxes),
+                "detection_id": detection_id,
+                "model": {"loaded_from_name": model_info.get("loaded_from_name")},
+            })
+        except Exception as exc:
+            logger.error("api_alpr_detect error: %s", exc)
+            return jsonify({"error": str(exc)}), 500
+
+    @app.get("/api/alpr/history")
+    def api_alpr_history():
+        hours = _parse_int(request.args.get("hours"), default=24, minimum=1, maximum=168)
+        limit = _parse_int(request.args.get("limit"), default=100, minimum=1, maximum=500)
+        try:
+            try:
+                from db import get_license_plates, count_license_plates
+            except ImportError:
+                from fisheye_demo.db import get_license_plates, count_license_plates
+            items = get_license_plates(hours=hours, limit=limit)
+            return jsonify({"plates": items, "total": count_license_plates(hours=hours),
+                            "hours": hours})
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    @app.get("/api/alpr/search")
+    def api_alpr_search():
+        q = (request.args.get("q") or "").strip()
+        hours = _parse_int(request.args.get("hours"), default=168, minimum=1, maximum=720)
+        if not q:
+            return jsonify({"error": "Cần tham số 'q'"}), 400
+        try:
+            try:
+                from db import get_license_plates
+            except ImportError:
+                from fisheye_demo.db import get_license_plates
+            items = get_license_plates(hours=hours, query=q, limit=200)
+            return jsonify({"query": q, "plates": items, "total": len(items)})
+        except Exception as exc:
             return jsonify({"error": str(exc)}), 500
 
     logger.info("Extended routes registered successfully")

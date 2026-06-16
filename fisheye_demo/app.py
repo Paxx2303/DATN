@@ -3,7 +3,7 @@ app.py — Flask Application Factory
 
 THIẾT KẾ:
 - create_app() là điểm khởi tạo duy nhất. Không import trực tiếp `app` từ ngoài.
-- Thứ tự khởi tạo: Config → Folders → DB → Blueprints → Logging.
+- Thứ tự khởi tạo: Config → Folders → DB → Blueprints → Extended Routes → Logging.
 - Hỗ trợ graceful shutdown với atexit để dừng background threads.
 """
 import logging
@@ -30,14 +30,69 @@ def create_app(config_class=Config) -> Flask:
     # 3. Đăng ký tất cả Blueprints
     register_blueprints(app)
 
-    # 4. Cấu hình logging toàn hệ thống
+    # 4. Đăng ký extended routes (analytics, alerts, line-counter, speed, congestion...)
+    _register_extended(app)
+
+    # 5. Cấu hình logging toàn hệ thống
     _configure_logging(app)
 
-    # 5. Đăng ký cleanup hook khi server dừng
+    # 6. Đăng ký cleanup hook khi server dừng
     from services.camera_monitor import camera_monitor
     atexit.register(lambda: camera_monitor.stop())
 
     return app
+
+
+def _register_extended(app: Flask) -> None:
+    """Import và gọi register_extended_routes() với các singleton cần thiết."""
+    try:
+        from routes_extended import register_extended_routes
+        from analytics import heatmap, density_analyzer
+        from alert_manager import alert_manager
+        from line_counter import line_counter
+        from speed_estimator import SpeedEstimator
+        from congestion_detector import CongestionDetector
+
+        # Tạo adapter objects đơn giản cho settings và registry
+        # (routes_extended dùng settings.device và registry.load())
+        class _Settings:
+            device = Config.DEFAULT_DEVICE
+
+        class _Registry:
+            def load(self):
+                from services.model_registry import load_model, get_available_models
+                model_key = Config.DEFAULT_MODEL_KEY
+                model = load_model(model_key, Config.DEFAULT_DEVICE)
+                avail = get_available_models()
+                model_info = avail.get(model_key, {})
+                model_info["loaded_from_name"] = model_info.get("name", model_key)
+                model_info["device"] = Config.DEFAULT_DEVICE
+                return model, model_info
+
+        # Singleton instances cho các API trạng thái toàn cục
+        speed_estimator = SpeedEstimator(
+            speed_limit_kmh=Config.SPEED_LIMIT_KMH,
+        )
+        congestion_detector = CongestionDetector()
+
+        register_extended_routes(
+            app=app,
+            settings=_Settings(),
+            registry=_Registry(),
+            heatmap=heatmap,
+            density_analyzer=density_analyzer,
+            alert_manager=alert_manager,
+            line_counter=line_counter,
+            speed_estimator=speed_estimator,
+            congestion_detector=congestion_detector,
+        )
+        app.logger.info("Extended routes registered successfully")
+    except Exception as exc:
+        app.logger.error(
+            "register_extended_routes FAILED — extended API endpoints "
+            "(analytics/alerts/incidents/speed/congestion) will be missing: %s",
+            exc, exc_info=True,
+        )
 
 
 def _ensure_directories(app: Flask) -> None:

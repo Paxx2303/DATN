@@ -67,10 +67,10 @@ def detect():
     iou       = float(request.form.get("iou", Config.DEFAULT_IOU))
     device    = request.form.get("device", Config.DEFAULT_DEVICE)
     
-    source_layout    = request.form.get("source_layout", "normal")
-    fisheye_raw      = request.form.get("fisheye") or request.form.get("apply_fisheye")
-    fisheye_enabled  = resolve_fisheye_enabled(
-        fisheye_raw, source_layout, auto_apply_for_normal=True,
+    source_layout   = request.form.get("source_layout", "normal")
+    fisheye_raw     = request.form.get("fisheye") or request.form.get("apply_fisheye")
+    fisheye_enabled = resolve_fisheye_enabled(
+        fisheye_raw, source_layout, auto_apply_for_normal=True, model_key=model_key,
     )
     fisheye_strength = float(request.form.get("fisheye_strength", Config.FISHEYE_STRENGTH))
     fisheye_radius   = float(request.form.get("fisheye_radius", Config.FISHEYE_RADIUS))
@@ -103,9 +103,9 @@ def detect():
             file, filename, task, model_key, conf, iou, device, preprocessing_config
         )
     
-    # ── XỬ LÝ VIDEO: đồng bộ ──────────────────────────────────
+    # ── XỬ LÝ VIDEO: bất đồng bộ qua job queue (tránh timeout) ──
     if is_video:
-        return _handle_video_detect_sync(
+        return _handle_video_submit(
             file, filename, task, model_key, conf, iou, device, preprocessing_config
         )
 
@@ -289,20 +289,22 @@ def _video_worker_fn(job_id: str, params: dict, progress_cb) -> str:
     from PIL import Image
     import cloud_storage
     
+    from incident_detector import IncidentDetector
+
     result_id  = params["result_id"]
     model_key  = params["model_key"]
     device     = params["device"]
     prep       = params["preprocessing"]
     filename   = params["filename"]
-    
+
     logger.info(f"Video worker started: job={job_id}, result={result_id}")
-    
+
     # Load model
     model = load_model(model_key, device)
-    
-    # Khởi tạo incident detector - Đã tắt theo yêu cầu người dùng
-    inc_detector = None
-    
+
+    # Khởi tạo incident detector (phát hiện đỗ sai/dừng/ngược chiều)
+    inc_detector = IncidentDetector(camera_id=result_id)
+
     # Chạy video processing
     stats = run_video_detect(
         input_path=params["input_path"],
@@ -327,19 +329,43 @@ def _video_worker_fn(job_id: str, params: dict, progress_cb) -> str:
     )
     
     progress_cb(95.0)
-    
-    # Upload GCS nếu cấu hình
-    result_dir = Config.RESULTS_FOLDER / result_id
-    gcs_urls = cloud_storage.upload_result_folder(result_id, result_dir)
-    
+
+    # Upload GCS nếu cấu hình (per-file upload, no folder helper)
+    gcs_urls: dict = {}
+    if cloud_storage.is_enabled():
+        result_dir = Config.RESULTS_FOLDER / result_id
+        for fname in ("annotated.mp4", "preview.jpg"):
+            fpath = result_dir / fname
+            if fpath.exists():
+                obj_name = cloud_storage.build_object_name(result_id, fname)
+                info = cloud_storage.upload_image_bytes(
+                    fpath.read_bytes(), obj_name,
+                    content_type="video/mp4" if fname.endswith(".mp4") else "image/jpeg",
+                    detection_id=result_id, image_role=fname.split(".")[0],
+                )
+                if info:
+                    gcs_urls[fname] = info.get("gcs_public_url", "")
+
+    # ── Persist analytics phụ vào DB ─────────────────────────
+    _persist_video_analytics(result_id, stats)
+
     # Lưu DB
     summary = {
-        "counts":     stats["counts"],
-        "avg_speed":  stats["avg_speed"],
-        "duration_s": stats["duration_s"],
-        "frame_count": stats["frame_count"],
-        "incidents":  len(stats.get("incidents", [])),
-        "model_key":  model_key,
+        "counts":            stats["counts"],
+        "total_unique":      stats.get("total_unique", sum(stats["counts"].values())),
+        "avg_speed":         stats["avg_speed"],
+        "max_speed":         stats.get("max_speed", 0.0),
+        "duration_s":        stats["duration_s"],
+        "frame_count":       stats["frame_count"],
+        "processing_fps":    stats.get("fps_processed"),
+        "resolution":        stats.get("resolution", "unknown"),
+        "detection_stride":  stats.get("detection_stride", 1),
+        "target_detect_fps": stats.get("target_detect_fps"),
+        "incidents":         len(stats.get("incidents", [])),
+        "speed_violations":  len(stats.get("speed_violations", [])),
+        "line_counter":      stats.get("line_counter", {}),
+        "congestion":        stats.get("congestion", {}),
+        "model_key":         model_key,
     }
     artifacts = {
         "annotated": "annotated.mp4",
@@ -381,6 +407,90 @@ def _video_worker_fn(job_id: str, params: dict, progress_cb) -> str:
     return result_id
 
 
+def _persist_video_analytics(result_id: str, stats: dict) -> None:
+    """Lưu line-counter / speed-violations / incidents từ kết quả video vào DB."""
+    from datetime import datetime
+    hour_bucket = datetime.utcnow().strftime("%Y-%m-%d %H:00")
+
+    # Traffic counts theo hướng (từ line counter)
+    lc = stats.get("line_counter", {}) or {}
+    for direction, classes in (lc.get("directions", {}) or {}).items():
+        for cls, cnt in classes.items():
+            if cls == "total" or not cnt:
+                continue
+            try:
+                database.save_traffic_count(result_id, direction, cls, hour_bucket, int(cnt))
+            except Exception as exc:
+                logger.warning("save_traffic_count failed: %s", exc)
+
+    # Speed violations
+    for v in stats.get("speed_violations", []) or []:
+        try:
+            database.save_speed_violation(
+                camera_id=result_id,
+                track_id=v.get("track_id", 0),
+                vehicle_type=v.get("vehicle_type", "unknown"),
+                speed_kmh=v.get("speed_kmh", 0.0),
+                limit_kmh=v.get("limit_kmh", Config.SPEED_LIMIT_KMH),
+            )
+        except Exception as exc:
+            logger.warning("save_speed_violation failed: %s", exc)
+
+    # Incidents
+    for inc in stats.get("incidents", []) or []:
+        try:
+            rec = dict(inc)
+            rec.setdefault("camera_id", result_id)
+            database.save_incident(rec)
+        except Exception as exc:
+            logger.warning("save_incident failed: %s", exc)
+
+
+def _build_video_response(result_id: str, model_key: str, prep: dict) -> dict | None:
+    """Dựng payload JSON cho video đã xử lý (dùng cho sync và polling job)."""
+    record = database.get_detection_by_id(result_id)
+    if record is None:
+        return None
+
+    from routes.history import inject_artifact_urls
+    record = inject_artifact_urls(record)
+
+    summary_db = record.get("summary", {}) or {}
+    frame_count = summary_db.get("frame_count", 0)
+    duration_s  = summary_db.get("duration_s", 0) or 1
+
+    from services.model_registry import get_available_models
+    avail = get_available_models()
+    model_name = avail.get(model_key, {}).get("name", f"YOLO {model_key.capitalize()}")
+
+    return {
+        "record":      record,
+        "request_id":  result_id,
+        "media_type":  "video",
+        "summary": {
+            "total_frames":      frame_count,
+            "fps_original":      round(frame_count / duration_s, 1),
+            "inference_ms_avg":  round(duration_s * 1000 / max(frame_count, 1), 1),
+            "class_counts":      summary_db.get("counts", {}),
+            "total_detections":  summary_db.get("total_unique",
+                                                sum((summary_db.get("counts", {}) or {}).values())),
+            "resolution":        summary_db.get("resolution", "unknown"),
+            "processing_fps":    summary_db.get("processing_fps", None),
+            "detection_stride":  summary_db.get("detection_stride", 1),
+            "target_detect_fps": summary_db.get("target_detect_fps", None),
+            "avg_speed":         summary_db.get("avg_speed", 0.0),
+            "max_speed":         summary_db.get("max_speed", 0.0),
+            "incidents":         summary_db.get("incidents", 0),
+            "speed_violations":  summary_db.get("speed_violations", 0),
+        },
+        "preprocessing": {
+            "enabled":       prep["enabled"],
+            "source_layout": "fisheye" if prep["enabled"] else "normal",
+        },
+        "model": {"loaded_from_name": model_name},
+    }
+
+
 def _handle_video_detect_sync(file, filename, task, model_key, conf, iou, device, prep):
     """
     Xử lý video đồng bộ trong request thread.
@@ -414,42 +524,10 @@ def _handle_video_detect_sync(file, filename, task, model_key, conf, iou, device
         logger.error(f"Sync video processing failed: {exc}", exc_info=True)
         return jsonify({"error": str(exc)}), 500
 
-    record = database.get_detection_by_id(result_id)
-    if record is None:
+    response = _build_video_response(result_id, model_key, prep)
+    if response is None:
         return jsonify({"error": "Video processing completed but record not found"}), 500
-
-    from routes.history import inject_artifact_urls
-    record = inject_artifact_urls(record)
-
-    summary_db = record.get("summary", {}) or {}
-    frame_count = summary_db.get("frame_count", 0)
-    duration_s  = summary_db.get("duration_s", 0) or 1
-
-    from services.model_registry import get_available_models
-    avail = get_available_models()
-    model_name = avail.get(model_key, {}).get("name", f"YOLO {model_key.capitalize()}")
-
-    return jsonify({
-        "record":      record,
-        "request_id":  result_id,
-        "media_type":  "video",
-        "summary": {
-            "total_frames":      frame_count,
-            "fps_original":      round(frame_count / duration_s, 1),
-            "inference_ms_avg":  round(duration_s * 1000 / max(frame_count, 1), 1),
-            "class_counts":      summary_db.get("counts", {}),
-            "total_detections":  sum(summary_db.get("counts", {}).values()),
-            "resolution":        summary_db.get("resolution", "unknown"),
-            "processing_fps":    summary_db.get("processing_fps", None),
-            "detection_stride":  summary_db.get("detection_stride", 1),
-            "target_detect_fps": summary_db.get("target_detect_fps", None),
-        },
-        "preprocessing": {
-            "enabled":       prep["enabled"],
-            "source_layout": "fisheye" if prep["enabled"] else "normal",
-        },
-        "model": {"loaded_from_name": model_name},
-    }), 200
+    return jsonify(response), 200
 
 
 def _handle_image_convert(file, filename, prep):
@@ -589,6 +667,32 @@ def get_job_status(job_id: str):
     if status is None:
         return jsonify({"error": "Job not found"}), 404
     return jsonify(status), 200
+
+
+@detect_bp.route("/jobs/<job_id>/result", methods=["GET"])
+def get_job_result(job_id: str):
+    """Lấy payload kết quả đầy đủ của một video job đã hoàn tất."""
+    status = video_job_queue.get_status(job_id)
+    if status is None:
+        return jsonify({"error": "Job not found"}), 404
+    if status["status"] == "failed":
+        return jsonify({"error": status.get("error_message") or "Job failed"}), 500
+    if status["status"] != "done":
+        return jsonify({"status": status["status"], "progress": status["progress"]}), 202
+
+    result_id = status.get("result_id")
+    record = database.get_detection_by_id(result_id) if result_id else None
+    if record is None:
+        return jsonify({"error": "Result record not found"}), 404
+
+    summary_db = record.get("summary", {}) or {}
+    model_key = summary_db.get("model_key", Config.DEFAULT_MODEL_KEY)
+    prep = {"enabled": record.get("source_layout") == "fisheye"}
+
+    response = _build_video_response(result_id, model_key, prep)
+    if response is None:
+        return jsonify({"error": "Result record not found"}), 404
+    return jsonify(response), 200
 
 
 @detect_bp.route("/jobs", methods=["GET"])

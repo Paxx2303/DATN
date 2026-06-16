@@ -68,18 +68,23 @@ def load_model(model_key: str = None, device: str = None):
         return model
 
 
+_MODEL_DISPLAY_NAMES = {
+    "traffic": "YOLO11 Traffic",
+    "nano":    "YOLO11 Nano",
+    "best":    "YOLO11 FishEye v5 (best)",
+}
+
+
 def get_available_models() -> dict[str, dict]:
     """
-    Trả về thông tin các model có sẵn (path, exists, loaded).
+    Trả về thông tin các model có sẵn (name, path, exists, loaded).
     """
     result = {}
     for key, path in Config.AVAILABLE_MODELS.items():
         exists = Path(path).exists()
-        cache_key_cpu = f"{key}_cpu"
-        loaded = cache_key_cpu in _model_cache or any(
-            k.startswith(key) for k in _model_cache
-        )
+        loaded = any(k.startswith(f"{key}_") for k in _model_cache)
         result[key] = {
+            "name": _MODEL_DISPLAY_NAMES.get(key, f"YOLO {key.capitalize()}"),
             "path": path,
             "exists": exists,
             "loaded": loaded,

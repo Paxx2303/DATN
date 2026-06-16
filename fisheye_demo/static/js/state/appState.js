@@ -9,7 +9,6 @@ class AppState {
     this.latestRecord = null;
     this.livePollTimer = null;
     this.liveMonitorRunning = false;
-    this.liveStreamAttached = false;
     this.lastLiveCycleCount = null;
     this.lastLiveUpdatedAt = null;
     this.liveIntervalSeconds = 0.5;

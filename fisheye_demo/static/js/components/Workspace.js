@@ -6,7 +6,14 @@ import { appState } from '../state/appState.js';
 import { ApiService } from '../services/api.js';
 import { resolveApplyFisheye } from '../utils/helpers.js';
 
+let workspaceClassNames = [];
+let workspaceClassColors = {};
+let workspaceOnJobCompleted = null;
+
 export function initWorkspace(classNames, classColors, onJobCompleted) {
+  workspaceClassNames = classNames;
+  workspaceClassColors = classColors;
+  workspaceOnJobCompleted = onJobCompleted;
   // Bind input element clicks and change handlers
   elements.uploadZone.addEventListener("click", () => elements.fileInput.click());
   
@@ -100,6 +107,10 @@ export function handleSelectedFile(file) {
     const probe = new Image();
     probe.onload = () => {
       elements.selectedSize.textContent = `${probe.naturalWidth} x ${probe.naturalHeight}`;
+      void runDetection(workspaceClassNames, workspaceClassColors, workspaceOnJobCompleted);
+    };
+    probe.onerror = () => {
+      void runDetection(workspaceClassNames, workspaceClassColors, workspaceOnJobCompleted);
     };
     probe.src = appState.currentObjectUrl;
   } else {
@@ -174,7 +185,9 @@ function buildFormData(fieldName) {
   formData.append("fisheye_effect", elements.fisheyeEffect.value);
   formData.append(
     "apply_fisheye",
-    resolveApplyFisheye(elements.fisheyeEnabled.value, sourceLayout),
+    resolveApplyFisheye(elements.fisheyeEnabled.value, sourceLayout, {
+      modelKey: elements.modelKey.value,
+    }),
   );
   
   if (appState.currentMediaType === "video") {
@@ -198,7 +211,12 @@ async function runDetection(classNames, classColors, onJobCompleted) {
   setLoading(true, appState);
   try {
     const formData = buildFormData("file");
-    const data = await ApiService.runDetection(formData);
+    let data = await ApiService.runDetection(formData);
+
+    // Video được xử lý bất đồng bộ → poll job cho tới khi xong
+    if (data.job_id) {
+      data = await pollVideoJob(data.job_id);
+    }
 
     appState.set("latestRecord", data.record);
     elements.requestId.textContent = data.request_id;
@@ -234,6 +252,28 @@ async function runDetection(classNames, classColors, onJobCompleted) {
   } finally {
     setLoading(false, appState);
   }
+}
+
+/**
+ * Poll một video job cho tới khi hoàn tất, trả về payload kết quả đầy đủ.
+ */
+async function pollVideoJob(jobId, { intervalMs = 1500, timeoutMs = 1000 * 60 * 30 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const status = await ApiService.runFetchJobStatus(jobId);
+    if (elements.resultMeta) {
+      elements.resultMeta.textContent = `processing ${Math.round(status.progress || 0)}%`;
+    }
+    if (status.status === "failed") {
+      throw new Error(status.error_message || "Video processing failed");
+    }
+    if (status.status === "done") {
+      const result = await ApiService.runFetchJobResult(jobId);
+      if (!result.pending) return result;
+    }
+  }
+  throw new Error("Video processing timed out");
 }
 
 /**
@@ -305,13 +345,14 @@ export function renderMedia(target, source, mediaType, cacheBustToken = null) {
   }
   const image = document.createElement("img");
   let src = source;
-  if (
-    cacheBustToken != null &&
-    typeof source === "string" &&
-    source.startsWith("data:")
-  ) {
-    const base = source.split("#")[0];
-    src = `${base}#${String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "")}`;
+  if (cacheBustToken != null && typeof source === "string") {
+    const token = String(cacheBustToken).replace(/[^a-zA-Z0-9._-]/g, "");
+    if (source.startsWith("data:")) {
+      src = `${source.split("#")[0]}#${token}`;
+    } else if (!source.startsWith("blob:")) {
+      const base = source.split("#")[0].split("?")[0];
+      src = `${base}?_=${token}`;
+    }
   }
   image.src = src;
   image.alt = "preview";
@@ -361,12 +402,13 @@ function renderDetectionSummary(data, classNames, classColors) {
     <div class="summary-pill">Fisheye ${data.preprocessing.enabled ? "on" : "off"}</div>
   `;
 
-  if (!data.detections.length) {
+  const detections = data.detections || [];
+  if (!detections.length) {
     elements.detectionList.innerHTML = '<div class="placeholder" style="max-width:none;">No objects detected above the configured threshold.</div>';
     return;
   }
 
-  elements.detectionList.innerHTML = data.detections.map((item) => `
+  elements.detectionList.innerHTML = detections.map((item) => `
     <div class="det-item">
       <div class="det-main">
         <div class="det-class">

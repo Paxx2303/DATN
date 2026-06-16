@@ -11,11 +11,21 @@ export function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-export function resolveApplyFisheye(fisheyeEnabled, sourceLayout, { forLive = false } = {}) {
+function isFisheyeModel(modelKey) {
+  const key = String(modelKey || "").toLowerCase();
+  return key === "best" || key === "fisheye" || key.includes("fisheye");
+}
+
+export function resolveApplyFisheye(
+  fisheyeEnabled,
+  sourceLayout,
+  { forLive = false, modelKey = null } = {},
+) {
   if (fisheyeEnabled === "true") return "true";
   if (fisheyeEnabled === "false") return "false";
   if (forLive) return "false";
-  return sourceLayout === "normal" ? "true" : "false";
+  if (sourceLayout === "fisheye") return "false";
+  return isFisheyeModel(modelKey) ? "true" : "false";
 }
 
 export function normalizeExternalCameraUrl(value) {

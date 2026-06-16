@@ -1,0 +1,47 @@
+# ─── Python ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.hypothesis/
+.benchmarks/
+
+# ─── Môi trường / bí mật ──────────────────────────────────
+.env
+.env.local
+.env.production
+*.key
+*-credentials.json
+
+# ─── Mô hình & trọng số (lớn — không commit) ──────────────
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# ─── Database / dữ liệu runtime ───────────────────────────
+*.db
+*.sqlite3
+*.sqlite
+*.db-wal
+*.db-shm
+
+# ─── Output runtime ───────────────────────────────────────
+fisheye_demo/static/results/
+fisheye_demo/static/uploads/
+*.log
+
+# ─── IDE / OS ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+
+# ─── Tạm / backup ─────────────────────────────────────────
+*.bak
+*.tmp
