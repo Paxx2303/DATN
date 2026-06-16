@@ -252,69 +252,14 @@ def resolve_youtube_hls(video_id: str) -> Optional[str]:
     return None
 
 
-# Pool VideoCapture BỀN cho HLS — tránh mở lại stream mỗi chu kỳ (~3-4s) khiến
-# hình "không cập nhật". Mỗi video giữ 1 capture + lock riêng (2 cam vẫn song song).
-_CAP_POOL: dict[str, dict] = {}
-_CAP_POOL_LOCK = threading.Lock()
-
-
-def _get_cap_slot(video_id: str) -> dict:
-    with _CAP_POOL_LOCK:
-        slot = _CAP_POOL.get(video_id)
-        if slot is None:
-            slot = {"cap": None, "url": None, "lock": threading.Lock()}
-            _CAP_POOL[video_id] = slot
-        return slot
-
-
-def _grab_persistent_youtube_frame(video_id: str) -> Optional[Image.Image]:
-    """
-    Lấy frame MỚI NHẤT từ HLS, tái dùng capture đang mở (đọc nhanh).
-    Mở lại nếu chưa mở / URL đổi (resolve mới) / đọc lỗi. None nếu thất bại.
-    """
-    hls = resolve_youtube_hls(video_id)
-    if not hls:
-        return None
-    slot = _get_cap_slot(video_id)
-    with slot["lock"]:
-        cap = slot["cap"]
-        if cap is not None and slot["url"] != hls:   # URL đã resolve mới → tạo lại
-            try: cap.release()
-            except Exception: pass
-            cap = None
-        if cap is None or not cap.isOpened():
-            cap = cv2.VideoCapture(hls)
-            try: cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            except Exception: pass
-            slot["cap"], slot["url"] = cap, hls
-        # Bỏ qua frame cũ trong buffer để lấy frame gần thực tại nhất
-        ok = False
-        for _ in range(4):
-            ok = cap.grab()
-            if not ok:
-                break
-        frame = None
-        if ok:
-            ok, frame = cap.retrieve()
-        if not ok or frame is None:
-            try: cap.release()
-            except Exception: pass
-            slot["cap"] = None
-            return None
-        return Image.fromarray(frame[..., ::-1].astype(np.uint8))
-
-
 def _fetch_youtube_live_frame(video_id: str) -> Optional[Image.Image]:
-    """Frame full-res từ YouTube live: ưu tiên capture bền, fallback mở-1-lần. None nếu hỏng."""
+    """
+    Frame full-res từ YouTube live. MỞ MỚI mỗi lần gọi (chủ ý): HLS googlevideo
+    chỉ giữ cửa sổ segment ngắn — giữ capture mở rồi đọc chậm sẽ kẹt frame cũ,
+    nên mỗi chu kỳ mở lại để nạp playlist mới → ảnh luôn tươi. None nếu hỏng.
+    """
     if not _YT_LIVE_FRAMES:
         return None
-    try:
-        img = _grab_persistent_youtube_frame(video_id)
-        if img is not None:
-            return img
-    except Exception as exc:
-        logger.warning("persistent youtube frame %s lỗi: %s", video_id, exc)
-    # Fallback: mở 1 lần (chậm hơn nhưng chắc)
     hls = resolve_youtube_hls(video_id)
     if not hls:
         return None
