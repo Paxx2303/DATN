@@ -394,14 +394,6 @@
               <div class="sec"><i class="ti ti-video"></i> External Camera Video</div>
               <div style="display:flex; flex-direction:column; gap:12px;">
                 <input id="external-camera-url" type="hidden" value="https://camera.0511.vn/camera.html">
-                <div>
-                  <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
-                    for="external-camera-compute-mode">Compute Mode</label>
-                  <select id="external-camera-compute-mode">
-                    <option value="cpu" selected>CPU — 1 cam (frame-by-frame)</option>
-                    <option value="gpu">GPU — 4 cams (parallel)</option>
-                  </select>
-                </div>
                 <input id="external-camera-live-interval" type="hidden"
                   value="{{ "%.1f"|format(external_camera_live_interval_seconds) }}">
                 <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer;">
@@ -441,7 +433,7 @@
 
             <div class="card" style="font-size:10.5px; color:var(--color-text-tertiary); line-height:1.45;">
               <i class="ti ti-info-circle" style="color:var(--color-text-info);"></i>
-              GPU mode: 4 camera song song. CPU mode: 1 camera frame-by-frame.<br>
+              Tự động dùng GPU nếu có (không thì CPU). Xử lý tối đa 2 camera.<br>
               Cảnh báo tự động khi mật độ cao hoặc ùn tắc nghiêm trọng.
             </div>
 

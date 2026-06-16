@@ -402,10 +402,9 @@ function renderExternalCameraLiveStatus(data, options = {}) {
 function buildExternalCameraFormData() {
   const formData = new FormData();
   const sourceLayout = elements.sourceLayout.value;
-  const computeMode = elements.externalCameraComputeMode.value;
   formData.append("external_camera_url", "https://camera.0511.vn/camera.html");
-  formData.append("compute_mode", computeMode);
-  formData.append("camera_limit", computeMode === "gpu" ? "4" : "1");
+  // Thiết bị do backend tự chọn (GPU nếu có, không thì CPU). Xử lý tối đa 2 camera.
+  formData.append("camera_limit", "2");
   formData.append("model_key", elements.modelKey.value);
   formData.append("conf", elements.confidence.value);
   formData.append("iou", elements.iou.value);

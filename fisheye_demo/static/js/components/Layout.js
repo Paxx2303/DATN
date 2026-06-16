@@ -26,7 +26,6 @@ export const elements = {
   refreshHistory: document.getElementById("refresh-history"),
   externalCameraFrame: document.getElementById("external-camera-frame"),
   externalCameraUrl: document.getElementById("external-camera-url"),
-  externalCameraComputeMode: document.getElementById("external-camera-compute-mode"),
   externalCameraLiveInterval: document.getElementById("external-camera-live-interval"),
   externalCameraLoad: document.getElementById("external-camera-load"),
   externalCameraDetect: document.getElementById("external-camera-detect"),

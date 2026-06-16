@@ -103,11 +103,21 @@ def health():
     models = get_available_models()
     active_key = Config.DEFAULT_MODEL_KEY
     active_model = models.get(active_key, {})
+    # Trạng thái GPU thực tế (để chẩn đoán "GPU chậm" = có đang chạy CPU không)
+    gpu_info = {"available": False, "name": None}
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_info = {"available": True, "name": torch.cuda.get_device_name(0)}
+    except Exception:
+        pass
+
     return jsonify({
         "status":  "ok",
         "db_type": database._DB_TYPE,
         "models":  models,
         "device":  Config.DEFAULT_DEVICE,
+        "gpu":     gpu_info,
         "version": "1.0.0",
         "model": {
             "loaded_from_name": f"YOLO {active_key.capitalize()}",

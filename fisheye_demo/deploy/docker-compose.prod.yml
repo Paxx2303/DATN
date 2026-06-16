@@ -46,7 +46,8 @@ services:
       # ── Inference ──────────────────────────────────────────────────────────
       FISHEYE_DEFAULT_CONF: "${FISHEYE_DEFAULT_CONF:-0.25}"
       FISHEYE_DEFAULT_IOU: "${FISHEYE_DEFAULT_IOU:-0.45}"
-      FISHEYE_DEVICE: "${FISHEYE_DEVICE:-0}"
+      # Để trống = tự dò GPU nếu có, không thì CPU (không ép "0" gây 500 khi thiếu GPU)
+      FISHEYE_DEVICE: "${FISHEYE_DEVICE:-}"
       FISHEYE_PRELOAD_MODEL: "${FISHEYE_PRELOAD_MODEL:-1}"
       FISHEYE_IMPORT_PRELOAD_MODEL: "${FISHEYE_IMPORT_PRELOAD_MODEL:-0}"
       FISHEYE_MAX_UPLOAD_MB: "${FISHEYE_MAX_UPLOAD_MB:-256}"

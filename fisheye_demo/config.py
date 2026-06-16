@@ -40,6 +40,29 @@ def _resolve_dir(value: str | None, fallback: Path) -> Path:
     return p if p.is_absolute() else (BASE_DIR / p)
 
 
+def _resolve_device(value: str | None) -> str:
+    """
+    Chọn thiết bị tính toán: MẶC ĐỊNH dùng GPU nếu có, không thì CPU.
+
+    - Nếu env đặt tường minh ("cpu", "cuda:0", "0", "mps") → tôn trọng.
+    - Nếu rỗng / "auto" / "gpu" → tự dò: CUDA → MPS → CPU.
+    Không bao giờ ép GPU khi máy không có (tránh lỗi 500 lúc inference).
+    """
+    v = (value or "").strip().lower()
+    if v and v not in ("auto", "gpu"):
+        return value  # override tường minh
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda:0"
+        mps = getattr(getattr(torch, "backends", None), "mps", None)
+        if mps is not None and mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
 class Config:
     # ── Paths ────────────────────────────────────────────────
     UPLOAD_FOLDER     = _resolve_dir(_env("FISHEYE_UPLOAD_DIR"), BASE_DIR / "static" / "uploads")
@@ -65,7 +88,7 @@ class Config:
     }
     DEFAULT_CONF      = float(_env("YOLO_CONF", "FISHEYE_DEFAULT_CONF", default="0.35"))
     DEFAULT_IOU       = float(_env("YOLO_IOU", "FISHEYE_DEFAULT_IOU", default="0.45"))
-    DEFAULT_DEVICE    = _env("COMPUTE_DEVICE", "FISHEYE_DEVICE", default="cpu")  # "cpu" | "cuda:0" | "mps"
+    DEFAULT_DEVICE    = _resolve_device(_env("COMPUTE_DEVICE", "FISHEYE_DEVICE"))  # auto: GPU nếu có, không thì CPU
 
     # ── Fisheye Defaults ─────────────────────────────────────
     FISHEYE_STRENGTH  = float(os.getenv("FISHEYE_STRENGTH", "0.6"))
@@ -82,8 +105,8 @@ class Config:
         os.getenv("EXT_CAM_INTERVAL")
         or os.getenv("FISHEYE_EXTERNAL_CAMERA_LIVE_INTERVAL", "0.5")
     )  # seconds
-    EXT_CAM_LIMIT      = int(os.getenv("EXT_CAM_LIMIT", "6"))
-    EXT_CAM_LIMIT_GPU  = int(os.getenv("EXT_CAM_LIMIT_GPU", "4"))   # cameras in parallel (GPU)
+    EXT_CAM_LIMIT      = int(os.getenv("EXT_CAM_LIMIT", "2"))       # xử lý tối đa 2 camera
+    EXT_CAM_LIMIT_GPU  = int(os.getenv("EXT_CAM_LIMIT_GPU", "2"))   # cameras in parallel (GPU)
     EXT_CAM_LIMIT_CPU  = int(os.getenv("EXT_CAM_LIMIT_CPU", "1"))   # cameras sequential (CPU)
 
     # ── ALPR (Nhận diện biển số) trên feed live ──────────────

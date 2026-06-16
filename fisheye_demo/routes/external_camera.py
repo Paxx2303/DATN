@@ -261,7 +261,8 @@ def start_monitor():
     
     source_url = data.get("source_url") or data.get("external_camera_url", "") or Config.EXT_CAM_SOURCE_URL
     interval   = float(data.get("interval") or data.get("interval_seconds") or Config.EXT_CAM_INTERVAL)
-    device     = data.get("device") or data.get("compute_mode") or Config.DEFAULT_DEVICE
+    # Luôn để backend tự chọn thiết bị (GPU nếu có, không thì CPU) — bỏ lựa chọn từ UI.
+    device     = Config.DEFAULT_DEVICE
     from utils.helpers import resolve_fisheye_enabled
 
     source_layout = data.get("source_layout", "normal")
