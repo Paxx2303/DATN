@@ -78,6 +78,11 @@ services:
       FISHEYE_EXTERNAL_CAMERA_STREAM_URL: "${FISHEYE_EXTERNAL_CAMERA_STREAM_URL:-}"
       FISHEYE_EXTERNAL_CAMERA_LIVE_INTERVAL: "${FISHEYE_EXTERNAL_CAMERA_LIVE_INTERVAL:-1.0}"
       FISHEYE_MODEL_PATH: "${FISHEYE_MODEL_PATH:-}"
+      # ── YouTube live ───────────────────────────────────────────────────────
+      # 1 = grab frame video THẬT (full-res qua yt-dlp+HLS); 0 = chỉ thumbnail
+      # maxres 1280×720. Đặt 0 nếu YouTube chặn IP datacenter (GCP).
+      YOUTUBE_LIVE_FRAMES: "${YOUTUBE_LIVE_FRAMES:-1}"
+      YOUTUBE_HLS_TTL: "${YOUTUBE_HLS_TTL:-1800}"
     volumes:
       - fisheye-results:/app/static/results
       - fisheye-uploads:/app/static/uploads

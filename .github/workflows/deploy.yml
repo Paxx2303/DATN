@@ -46,9 +46,22 @@ jobs:
       - name: Remote Deploy Execution
         run: |
           gcloud compute ssh fisheye-gpu-instance --zone=asia-southeast1-b --command "
+            set -e
             mkdir -p ~/fisheye_app
             tar -xzf ~/fisheye_deploy.tar.gz -C ~/fisheye_app
             rm ~/fisheye_deploy.tar.gz
             cd ~/fisheye_app
+
+            # ── Giải phóng đĩa TRƯỚC khi build ────────────────────────────────
+            # Image torch+CUDA rất lớn (~10GB). Layer/cache cũ dồn lại làm đầy đĩa
+            # → buildkit chết khi 'exporting layers' (rpc Unavailable / EOF).
+            # Hạ stack cũ + xoá image/cache không dùng. KHÔNG dùng --volumes
+            # để giữ nguyên dữ liệu (DB, models, uploads).
+            echo '=== Disk TRƯỚC khi dọn ==='; df -h /
+            sudo docker compose -f deploy/docker-compose.prod.yml down --remove-orphans || true
+            sudo docker system prune -af || true
+            sudo docker builder prune -af || true
+            echo '=== Disk SAU khi dọn ==='; df -h /
+
             sudo docker compose -f deploy/docker-compose.prod.yml up --build -d
           "

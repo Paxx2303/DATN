@@ -11,6 +11,9 @@ THIẾT KẾ:
 - Trả về list[CameraEntry] với url, name, snapshot_image (PIL Image).
 """
 
+import os
+import time
+import threading
 import requests
 import logging
 import io
@@ -29,10 +32,11 @@ REQUEST_TIMEOUT = 10   # seconds
 
 @dataclass
 class CameraEntry:
-    url: str                        # URL của snapshot JPG
+    url: str                        # URL của snapshot JPG (hoặc thumbnail YouTube)
     name: str = ""                  # Tên camera (từ alt text hoặc URL)
     camera_index: int = 0
     snapshot: Optional[Image.Image] = field(default=None, repr=False)
+    video_id: Optional[str] = None  # YouTube video_id (nếu là YouTube live)
 
 
 def extract_camera_entries(
@@ -90,7 +94,7 @@ def extract_camera_entries(
         has_kw  = any(kw in lo for kw in _CAMERA_KEYWORDS)
         return has_ext or has_kw
 
-    def _add_entry(raw_url: str, name: str = "") -> bool:
+    def _add_entry(raw_url: str, name: str = "", video_id: str = None) -> bool:
         if not raw_url or raw_url.startswith("data:"):
             return False
         full = _resolve_url(source_url, raw_url)
@@ -101,6 +105,7 @@ def extract_camera_entries(
             url=full,
             name=name or f"Camera {len(entries) + 1}",
             camera_index=len(entries),
+            video_id=video_id,
         ))
         return True
 
@@ -112,7 +117,7 @@ def extract_camera_entries(
             parsed_src = urllib.parse.urlparse(src)
             video_id = parsed_src.path.split("/")[-1]
             if video_id:
-                thumb_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+                thumb_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
                 
                 # Attempt to find a meaningful title from nearby text
                 name = iframe.get("title", "").strip()
@@ -122,7 +127,8 @@ def extract_camera_entries(
                     if prev and prev.get_text(strip=True):
                         name = prev.get_text(strip=True)
                 
-                _add_entry(thumb_url, name or f"YouTube Live {video_id}")
+                _add_entry(thumb_url, name or f"YouTube Live {video_id}",
+                           video_id=video_id)
         if len(entries) >= limit:
             break
 
@@ -193,6 +199,99 @@ def extract_camera_entries(
     return entries[:limit]
 
 
+# ── YouTube live: grab frame video THẬT (full-res) qua yt-dlp + HLS ───────────
+
+# Bật/tắt việc lấy frame video thật. Tắt → chỉ dùng thumbnail maxres (1280×720).
+_YT_LIVE_FRAMES = os.getenv("YOUTUBE_LIVE_FRAMES", "1") not in ("0", "false", "False")
+
+# Cache HLS URL đã resolve: video_id → (hls_url, expire_ts). URL có hạn nên cache ngắn.
+_HLS_CACHE: dict[str, tuple] = {}
+_HLS_CACHE_LOCK = threading.Lock()
+_HLS_TTL = int(os.getenv("YOUTUBE_HLS_TTL", "1800"))   # 30 phút
+
+
+def resolve_youtube_hls(video_id: str) -> Optional[str]:
+    """
+    Resolve YouTube live `video_id` → URL HLS .m3u8 trực tiếp bằng yt-dlp.
+    Cache theo TTL (URL hết hạn sau ~vài giờ). Trả None nếu thất bại (thiếu
+    yt-dlp / không phải live / YouTube chặn) → caller fallback về thumbnail.
+    """
+    now = time.time()
+    with _HLS_CACHE_LOCK:
+        cached = _HLS_CACHE.get(video_id)
+        if cached and cached[1] > now:
+            return cached[0]
+    try:
+        import yt_dlp
+    except ImportError:
+        logger.warning("yt-dlp chưa cài → không lấy được frame live, dùng thumbnail.")
+        return None
+
+    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    ydl_opts = {
+        "quiet": True, "no_warnings": True, "skip_download": True,
+        # Ưu tiên ≤720p cho nhẹ GPU/băng thông; live → định dạng HLS (m3u8).
+        "format": "best[height<=720]/best",
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(watch_url, download=False)
+        hls = info.get("url")
+        if not hls:
+            for f in reversed(info.get("formats") or []):
+                if str(f.get("protocol", "")).startswith("m3u8") and f.get("url"):
+                    hls = f["url"]
+                    break
+        if hls:
+            with _HLS_CACHE_LOCK:
+                _HLS_CACHE[video_id] = (hls, now + _HLS_TTL)
+            return hls
+        logger.warning("Không tìm thấy HLS cho video %s (có thể không phải live).", video_id)
+    except Exception as exc:
+        logger.warning("resolve_youtube_hls(%s) lỗi: %s", video_id, exc)
+    return None
+
+
+def _fetch_youtube_live_frame(video_id: str) -> Optional[Image.Image]:
+    """Lấy 1 frame full-res từ luồng HLS của YouTube live. None nếu không được."""
+    if not _YT_LIVE_FRAMES:
+        return None
+    hls = resolve_youtube_hls(video_id)
+    if not hls:
+        return None
+    try:
+        return capture_stream_frame(hls)
+    except Exception as exc:
+        logger.warning("capture_stream_frame(youtube %s) lỗi: %s", video_id, exc)
+        return None
+
+
+def _fetch_youtube_thumb(url: str) -> Image.Image:
+    """
+    Lấy thumbnail YouTube ở độ phân giải cao nhất có sẵn.
+    maxresdefault (1280×720) → sddefault (640×480) → hqdefault (480×360).
+    YouTube trả placeholder nhỏ khi thiếu → bỏ qua, thử mức thấp hơn.
+    """
+    import re
+    m = re.search(r"/vi/([^/]+)/", url)
+    vid = m.group(1) if m else None
+    last = None
+    for q in ("maxresdefault", "sddefault", "hqdefault"):
+        try:
+            u = f"https://img.youtube.com/vi/{vid}/{q}.jpg"
+            resp = requests.get(u, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+            if img.size[0] >= 480:   # đủ lớn → dùng luôn
+                return img
+            last = img               # placeholder/nhỏ → giữ tạm, thử tiếp
+        except Exception:
+            continue
+    if last is not None:
+        return last
+    raise RuntimeError(f"Không lấy được thumbnail YouTube cho {url}")
+
+
 def fetch_snapshots_parallel(
     entries: list[CameraEntry],
     max_workers: int = 4,
@@ -207,9 +306,16 @@ def fetch_snapshots_parallel(
     
     def _fetch_one(entry: CameraEntry) -> Optional[CameraEntry]:
         try:
-            resp = requests.get(entry.url, timeout=REQUEST_TIMEOUT, stream=True)
-            resp.raise_for_status()
-            img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+            img = None
+            if entry.video_id:
+                # YouTube live: ưu tiên frame video THẬT (full-res), fallback thumbnail.
+                img = _fetch_youtube_live_frame(entry.video_id)
+            if img is None and "img.youtube.com/vi/" in entry.url:
+                img = _fetch_youtube_thumb(entry.url)
+            if img is None:
+                resp = requests.get(entry.url, timeout=REQUEST_TIMEOUT, stream=True)
+                resp.raise_for_status()
+                img = Image.open(io.BytesIO(resp.content)).convert("RGB")
             entry.snapshot = img
             return entry
         except Exception as e:
