@@ -252,14 +252,136 @@ def resolve_youtube_hls(video_id: str) -> Optional[str]:
     return None
 
 
+# ── Background reader: ffmpeg theo dõi HLS live → frame mới liên tục (fps cao) ──
+#
+# OpenCV đọc HLS googlevideo bị KẸT frame cũ (đã verify). ffmpeg CLI tự refresh
+# playlist .m3u8 nên bám live edge thật. Mỗi camera 1 thread chạy ffmpeg, đọc
+# rawvideo bgr24 (ép 1280×720 để biết kích thước byte), luôn giữ frame mới nhất.
+
+import shutil
+import subprocess
+
+_READER_W, _READER_H = 1280, 720
+_READER_FPS = int(os.getenv("YOUTUBE_LIVE_FPS", "4"))   # giới hạn fps để chặn CPU
+_READER_STALE_S = 8.0   # frame cũ hơn ngần này → coi reader hỏng → fallback
+
+
+def _ffmpeg_exe() -> Optional[str]:
+    return shutil.which("ffmpeg")
+
+
+class _HLSFrameReader(threading.Thread):
+    def __init__(self, video_id: str):
+        super().__init__(daemon=True)
+        self.video_id = video_id
+        self._latest = None              # BGR ndarray (H,W,3)
+        self._latest_ts = 0.0
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._proc = None
+
+    def run(self) -> None:
+        ff = _ffmpeg_exe()
+        if ff is None:
+            logger.warning("ffmpeg không có trong PATH → reader live tắt, dùng fallback.")
+            return
+        frame_bytes = _READER_W * _READER_H * 3
+        while not self._stop.is_set():
+            url = resolve_youtube_hls(self.video_id)
+            if not url:
+                time.sleep(2.0)
+                continue
+            cmd = [
+                ff, "-loglevel", "error", "-nostdin",
+                "-fflags", "nobuffer", "-flags", "low_delay",
+                "-i", url, "-an",
+                "-vf", f"scale={_READER_W}:{_READER_H}",
+                "-r", str(_READER_FPS),
+                "-f", "rawvideo", "-pix_fmt", "bgr24", "-",
+            ]
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                        stderr=subprocess.DEVNULL, bufsize=frame_bytes)
+                self._proc = proc
+            except Exception as exc:
+                logger.warning("ffmpeg spawn lỗi (%s): %s", self.video_id, exc)
+                time.sleep(2.0)
+                continue
+            try:
+                while not self._stop.is_set():
+                    raw = proc.stdout.read(frame_bytes)
+                    if not raw or len(raw) < frame_bytes:
+                        break                      # stream gãy/hết hạn → mở lại
+                    arr = np.frombuffer(raw, np.uint8).reshape(_READER_H, _READER_W, 3)
+                    with self._lock:
+                        self._latest = arr
+                        self._latest_ts = time.time()
+            finally:
+                try:
+                    proc.kill()
+                    proc.stdout.close()
+                except Exception:
+                    pass
+            time.sleep(0.5)                         # nhịp nghỉ trước khi mở lại
+
+    def get_latest(self) -> Optional["np.ndarray"]:
+        with self._lock:
+            if self._latest is None or (time.time() - self._latest_ts) > _READER_STALE_S:
+                return None
+            return self._latest.copy()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._proc is not None:
+            try:
+                self._proc.kill()
+            except Exception:
+                pass
+
+
+_READERS: dict[str, _HLSFrameReader] = {}
+_READERS_LOCK = threading.Lock()
+
+
+def _get_reader_frame(video_id: str) -> Optional[Image.Image]:
+    """Đảm bảo có reader cho video_id, trả frame mới nhất (PIL) hoặc None nếu chưa sẵn."""
+    with _READERS_LOCK:
+        r = _READERS.get(video_id)
+        if r is None or not r.is_alive():
+            r = _HLSFrameReader(video_id)
+            r.start()
+            _READERS[video_id] = r
+    frame = r.get_latest()
+    if frame is None:
+        return None
+    return Image.fromarray(frame[..., ::-1].astype(np.uint8))
+
+
+def stop_all_readers() -> None:
+    """Dừng & xoá toàn bộ reader (gọi khi monitor stop)."""
+    with _READERS_LOCK:
+        for r in _READERS.values():
+            try:
+                r.stop()
+            except Exception:
+                pass
+        _READERS.clear()
+
+
 def _fetch_youtube_live_frame(video_id: str) -> Optional[Image.Image]:
     """
-    Frame full-res từ YouTube live. MỞ MỚI mỗi lần gọi (chủ ý): HLS googlevideo
-    chỉ giữ cửa sổ segment ngắn — giữ capture mở rồi đọc chậm sẽ kẹt frame cũ,
-    nên mỗi chu kỳ mở lại để nạp playlist mới → ảnh luôn tươi. None nếu hỏng.
+    Frame full-res YouTube live: ưu tiên reader nền (liên tục → tức thì & tươi).
+    Khi reader chưa có frame đầu (vừa khởi động) → fallback mở-1-lần. None nếu hỏng.
     """
     if not _YT_LIVE_FRAMES:
         return None
+    try:
+        img = _get_reader_frame(video_id)
+        if img is not None:
+            return img
+    except Exception as exc:
+        logger.warning("reader frame %s lỗi: %s", video_id, exc)
+    # Fallback: mở 1 lần (cho chu kỳ đầu khi reader chưa kịp có frame)
     hls = resolve_youtube_hls(video_id)
     if not hls:
         return None

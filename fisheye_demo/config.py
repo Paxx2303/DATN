@@ -103,8 +103,8 @@ class Config:
     EXT_CAM_SOURCE_URL = os.getenv("EXT_CAM_SOURCE_URL", "https://camera.0511.vn/camera.html")
     EXT_CAM_INTERVAL   = float(
         os.getenv("EXT_CAM_INTERVAL")
-        or os.getenv("FISHEYE_EXTERNAL_CAMERA_LIVE_INTERVAL", "0.5")
-    )  # seconds
+        or os.getenv("FISHEYE_EXTERNAL_CAMERA_LIVE_INTERVAL", "0.3")
+    )  # giây/chu kỳ (reader nền cho frame tức thì nên có thể chạy nhanh)
     EXT_CAM_LIMIT      = int(os.getenv("EXT_CAM_LIMIT", "2"))       # xử lý tối đa 2 camera
     EXT_CAM_LIMIT_GPU  = int(os.getenv("EXT_CAM_LIMIT_GPU", "2"))   # cameras in parallel (GPU)
     EXT_CAM_LIMIT_CPU  = int(os.getenv("EXT_CAM_LIMIT_CPU", "1"))   # cameras sequential (CPU)

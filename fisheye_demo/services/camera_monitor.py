@@ -238,6 +238,12 @@ class ExternalCameraLiveMonitor:
             self._running = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=10.0)
+        # Dừng các reader HLS nền (giải phóng stream/CPU)
+        try:
+            from external_camera_detector import stop_all_readers
+            stop_all_readers()
+        except Exception:
+            pass
         logger.info("ExternalCameraLiveMonitor stopped")
 
     # ── Internal loop ───────────────────────────────────────────────────────
