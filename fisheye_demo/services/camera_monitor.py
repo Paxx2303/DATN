@@ -361,46 +361,11 @@ class ExternalCameraLiveMonitor:
                         self._camera_trackers[cam_key] = _CentroidTracker()
                     tracked, det_assignments = self._camera_trackers[cam_key].update(dets)
 
-                    # Speed estimation
+                    # Live KHÔNG đánh giá tốc độ (bỏ theo yêu cầu) — giảm tải vòng lặp.
                     fps_equiv = 1.0 / max(interval_s, 0.5)
-                    if cam_key not in self._camera_speed_estimators:
-                        self._camera_speed_estimators[cam_key] = SpeedEstimator(
-                            fps=fps_equiv,
-                            scale_factor=Config.SPEED_SCALE_FACTOR,
-                        )
-                    speed_est = self._camera_speed_estimators[cam_key]
                     track_speeds: dict[int, float] = {}
-                    # Map det_index → class_name for violation reporting
-                    _tid_to_class: dict[int, str] = {
-                        det_assignments[di]: dets[di].get("class_name", "unknown")
-                        for di in range(len(dets)) if di in det_assignments
-                    }
-                    for tid, (cx, cy) in tracked.items():
-                        track_speed = speed_est.update_single(
-                            tid, cx, cy, self._cycle_count,
-                            _tid_to_class.get(tid, "unknown"),
-                        )
-                        # Speed violation check (built into SpeedEstimator)
-                        violation = speed_est._violation_checker.check(
-                            tid, track_speed, self._cycle_count,
-                        )
-                        if violation:
-                            vtype = _tid_to_class.get(tid, "unknown")
-                            try:
-                                database.save_speed_violation(
-                                    cam_key, tid, vtype,
-                                    track_speed, speed_est.speed_limit_kmh, "",
-                                )
-                                alert_manager.fire_speed_violation_alert(
-                                    tid, track_speed, speed_est.speed_limit_kmh,
-                                    cam_key, vtype,
-                                )
-                            except Exception as _sv_exc:
-                                logger.warning("save_speed_violation error: %s", _sv_exc)
-                        if track_speed > 0:
-                            track_speeds[tid] = track_speed
-                    avg_speed = speed_est.get_average_speed()
-                    max_speed = speed_est.get_max_speed()
+                    avg_speed = 0.0
+                    max_speed = 0.0
 
                     # Line counter — update per tracked detection
                     for det_idx, det in enumerate(dets):
@@ -492,12 +457,9 @@ class ExternalCameraLiveMonitor:
                     self._stream_frames[f"camera_{entry.camera_index}"] = \
                         _pil_to_jpeg_bytes(annotated, quality=92)
 
-                    # Collage label: "CamName | 12v | H | 45km/h"
+                    # Collage label: "CamName | 12v | H"
                     cong_initial = congestion["level"][0].upper()
-                    speed_label = f"{max_speed:.0f}k" if max_speed > 0 else (
-                        f"{avg_speed:.0f}k" if avg_speed > 0 else "—k"
-                    )
-                    label = f"{entry.name}|{count}v|{cong_initial}|{speed_label}"
+                    label = f"{entry.name}|{count}v|{cong_initial}"
                     camera_labels[entry.camera_index] = label
 
                     # ── Alerts ──────────────────────────────────────
