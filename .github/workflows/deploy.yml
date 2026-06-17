@@ -1,63 +1,43 @@
-name: Deploy to GCP (SSH)
+name: Deploy YOLO via GCP Workload Identity
 
 on:
   push:
     branches:
       - main
 
-permissions:
-  contents: read
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Package app
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to VM via gcloud ssh
         run: |
-          # Code nằm trong thư mục fisheye_demo → đóng gói nội dung bên trong đó.
-          cd fisheye_demo
-          tar --exclude='.git' \
-              --exclude='venv' \
-              --exclude='__pycache__' \
-              --exclude='static/results/*' \
-              --exclude='static/uploads/*' \
-              -czf ../fisheye_deploy.tar.gz .
-          cd ..
-
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-
-      - name: Copy package to VM
-        run: |
-          scp -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no \
-              fisheye_deploy.tar.gz \
-              "${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:~/"
-
-      - name: Remote deploy
-        run: |
-          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no \
-              "${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}" '
-            set -e
-            mkdir -p ~/fisheye_app
-            tar -xzf ~/fisheye_deploy.tar.gz -C ~/fisheye_app
-            rm ~/fisheye_deploy.tar.gz
-            cd ~/fisheye_app
-
-            # ── Giải phóng đĩa TRƯỚC khi build ────────────────────────────────
-            # Image torch+CUDA rất lớn (~10GB). Layer/cache cũ dồn lại làm đầy đĩa
-            # → buildkit chết khi "exporting layers" (rpc Unavailable / EOF).
-            # KHÔNG dùng --volumes để giữ nguyên dữ liệu (DB, models, uploads).
-            echo "=== Disk TRUOC khi don ==="; df -h /
-            sudo docker compose -f deploy/docker-compose.prod.yml down --remove-orphans || true
-            sudo docker system prune -af || true
-            sudo docker builder prune -af || true
-            echo "=== Disk SAU khi don ==="; df -h /
-
-            sudo docker compose -f deploy/docker-compose.prod.yml up --build -d
-          '
+          gcloud compute ssh instance-20260617-184557 \
+            --zone=asia-east1-a \
+            --project=project-d9243352-39fe-44a5-90d \
+            --command="
+              if [ ! -d 'DATN' ]; then
+                git clone https://github.com/Paxx2303/DATN.git
+                cd DATN
+              else
+                cd DATN
+                git pull origin main
+              fi
+            "
