@@ -16,6 +16,7 @@ RUN apt-get update \
 
 COPY requirements.txt requirements-prod.txt ./
 RUN pip install --upgrade pip \
+    && pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu \
     && pip install -r requirements-prod.txt
 
 COPY . .

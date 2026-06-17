@@ -44,6 +44,6 @@ fast-alpr>=0.1.0
 python-dotenv>=1.0.1
 tqdm>=4.66.5
 
-# --- Testing ---
-pytest>=8.3.2
-pytest-mock>=3.14.0
+# --- Testing (dev only, not installed in production) ---
+# pytest>=8.3.2
+# pytest-mock>=3.14.0
