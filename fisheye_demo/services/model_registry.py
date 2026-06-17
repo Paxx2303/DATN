@@ -50,13 +50,21 @@ def load_model(model_key: str = None, device: str = None):
         model_path = Config.AVAILABLE_MODELS.get(model_key)
         if not model_path:
             raise KeyError(f"Unknown model key: '{model_key}'. Available: {list(Config.AVAILABLE_MODELS.keys())}")
-        
+
+        # Ultralytics auto-downloadable models (passed by name, not path)
+        _AUTO_DOWNLOAD = {"yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt",
+                          "yolov8n.pt", "yolov8s.pt", "yolov8m.pt"}
+
         if not Path(model_path).exists():
-            raise FileNotFoundError(
-                f"Model file not found: {model_path}\n"
-                f"Hãy đặt file .pt vào thư mục: {Config.MODEL_FOLDER}"
-            )
-        
+            model_name = Path(model_path).name
+            if model_name in _AUTO_DOWNLOAD:
+                logger.warning(f"Model file not found at {model_path}, auto-downloading {model_name}...")
+                model_path = model_name  # ultralytics sẽ tự download vào cache
+            else:
+                # Custom model không có → fallback về nano
+                logger.warning(f"Model file not found: {model_path}. Falling back to yolo11n.pt (auto-download).")
+                model_path = "yolo11n.pt"
+
         logger.info(f"Loading model '{model_key}' from {model_path} on {device}...")
         
         from ultralytics import YOLO
