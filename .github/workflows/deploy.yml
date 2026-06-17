@@ -1,4 +1,4 @@
-name: Deploy to GCP (WIF Mode)
+name: Deploy to GCP (SSH)
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   deploy:
@@ -16,19 +15,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Auth to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: 'projects/506043894973/locations/global/workloadIdentityPools/gh-pool/providers/gh-provider'
-          service_account: 'github-deployer@project-ef8a8694-e33d-4954-ad1.iam.gserviceaccount.com'
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Package and Upload
+      - name: Package app
         run: |
-          # Chú ý: Vì code của bạn nằm trong thư mục fisheye_demo, 
-          # chúng ta sẽ đóng gói nội dung bên trong đó.
+          # Code nằm trong thư mục fisheye_demo → đóng gói nội dung bên trong đó.
           cd fisheye_demo
           tar --exclude='.git' \
               --exclude='venv' \
@@ -38,14 +27,22 @@ jobs:
               -czf ../fisheye_deploy.tar.gz .
           cd ..
 
-          gcloud compute instances start fisheye-gpu-instance --zone=asia-southeast1-b
-
-          gcloud compute scp fisheye_deploy.tar.gz fisheye-gpu-instance:~/ --zone=asia-southeast1-b --project=project-ef8a8694-e33d-4954-ad1
-
-          
-      - name: Remote Deploy Execution
+      - name: Setup SSH key
         run: |
-          gcloud compute ssh fisheye-gpu-instance --zone=asia-southeast1-b --command "
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+
+      - name: Copy package to VM
+        run: |
+          scp -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no \
+              fisheye_deploy.tar.gz \
+              "${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:~/"
+
+      - name: Remote deploy
+        run: |
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no \
+              "${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}" '
             set -e
             mkdir -p ~/fisheye_app
             tar -xzf ~/fisheye_deploy.tar.gz -C ~/fisheye_app
@@ -54,14 +51,13 @@ jobs:
 
             # ── Giải phóng đĩa TRƯỚC khi build ────────────────────────────────
             # Image torch+CUDA rất lớn (~10GB). Layer/cache cũ dồn lại làm đầy đĩa
-            # → buildkit chết khi 'exporting layers' (rpc Unavailable / EOF).
-            # Hạ stack cũ + xoá image/cache không dùng. KHÔNG dùng --volumes
-            # để giữ nguyên dữ liệu (DB, models, uploads).
-            echo '=== Disk TRƯỚC khi dọn ==='; df -h /
+            # → buildkit chết khi "exporting layers" (rpc Unavailable / EOF).
+            # KHÔNG dùng --volumes để giữ nguyên dữ liệu (DB, models, uploads).
+            echo "=== Disk TRUOC khi don ==="; df -h /
             sudo docker compose -f deploy/docker-compose.prod.yml down --remove-orphans || true
             sudo docker system prune -af || true
             sudo docker builder prune -af || true
-            echo '=== Disk SAU khi dọn ==='; df -h /
+            echo "=== Disk SAU khi don ==="; df -h /
 
             sudo docker compose -f deploy/docker-compose.prod.yml up --build -d
-          "
+          '
