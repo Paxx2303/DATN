@@ -1,0 +1,1284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr/>
+      <p:pic>
+        <p:nvPicPr>
+          <p:cNvPr id="2" name="Picture 1" descr="image1.png"/>
+          <p:cNvPicPr>
+            <a:picLocks noChangeAspect="1"/>
+          </p:cNvPicPr>
+          <p:nvPr/>
+        </p:nvPicPr>
+        <p:blipFill>
+          <a:blip r:embed="rId1"/>
+          <a:stretch>
+            <a:fillRect/>
+          </a:stretch>
+        </p:blipFill>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="0" y="0"/>
+            <a:ext cx="12188952" cy="6858000"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+        </p:spPr>
+      </p:pic>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="TextBox 2"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="256032" y="91440"/>
+            <a:ext cx="10515600" cy="658368"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="l"/>
+            <a:r>
+              <a:rPr sz="3600" b="1" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri Light" panose="020F0302020204030204"/>
+              </a:rPr>
+              <a:t>Mục Tiêu &amp; Phạm Vi Nghiên Cứu</a:t>
+            </a:r>
+            <a:endParaRPr sz="3600" b="1" i="0">
+              <a:solidFill>
+                <a:srgbClr val="FFFFFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri Light" panose="020F0302020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="4" name="TextBox 3"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="11064240" y="137160"/>
+            <a:ext cx="914400" cy="530352"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="r"/>
+            <a:r>
+              <a:rPr sz="1900" b="0" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="DDDDFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>3/17</a:t>
+            </a:r>
+            <a:endParaRPr sz="1900" b="0" i="0">
+              <a:solidFill>
+                <a:srgbClr val="DDDDFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="5" name="Rectangle 4"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="256032" y="914400"/>
+            <a:ext cx="3749039" cy="2331720"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:solidFill>
+            <a:srgbClr val="28176B"/>
+          </a:solidFill>
+          <a:ln>
+            <a:noFill/>
+          </a:ln>
+        </p:spPr>
+        <p:style>
+          <a:lnRef idx="1">
+            <a:schemeClr val="accent1"/>
+          </a:lnRef>
+          <a:fillRef idx="3">
+            <a:schemeClr val="accent1"/>
+          </a:fillRef>
+          <a:effectRef idx="2">
+            <a:schemeClr val="accent1"/>
+          </a:effectRef>
+          <a:fontRef idx="minor">
+            <a:schemeClr val="lt1"/>
+          </a:fontRef>
+        </p:style>
+        <p:txBody>
+          <a:bodyPr rtlCol="0" anchor="ctr"/>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"/>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="6" name="TextBox 5"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="365760" y="1005840"/>
+            <a:ext cx="914400" cy="1005840"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"/>
+            <a:r>
+              <a:rPr sz="4400" b="1" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>01</a:t>
+            </a:r>
+            <a:endParaRPr sz="4400" b="1" i="0">
+              <a:solidFill>
+                <a:srgbClr val="FFFFFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="7" name="TextBox 6"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="1353312" y="1051560"/>
+            <a:ext cx="2560320" cy="594360"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="l"/>
+            <a:r>
+              <a:rPr sz="2400" b="1" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>Fine-tune YOLOv11-N</a:t>
+            </a:r>
+            <a:endParaRPr sz="2400" b="1" i="0">
+              <a:solidFill>
+                <a:srgbClr val="FFFFFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="8" name="TextBox 7"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="1353312" y="1691640"/>
+            <a:ext cx="2560320" cy="1371600"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="l"/>
+            <a:r>
+              <a:rPr sz="1900" b="0" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="DDDDFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>Trên bộ dữ liệu kết hợp
+FishEye8K + VisDrone2019</a:t>
+            </a:r>
+            <a:endParaRPr sz="1900" b="0" i="0">
+              <a:solidFill>
+                <a:srgbClr val="DDDDFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="9" name="Rectangle 8"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="4233672" y="914400"/>
+            <a:ext cx="3749039" cy="2331720"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:solidFill>
+            <a:srgbClr val="4472C4"/>
+          </a:solidFill>
+          <a:ln>
+            <a:noFill/>
+          </a:ln>
+        </p:spPr>
+        <p:style>
+          <a:lnRef idx="1">
+            <a:schemeClr val="accent1"/>
+          </a:lnRef>
+          <a:fillRef idx="3">
+            <a:schemeClr val="accent1"/>
+          </a:fillRef>
+          <a:effectRef idx="2">
+            <a:schemeClr val="accent1"/>
+          </a:effectRef>
+          <a:fontRef idx="minor">
+            <a:schemeClr val="lt1"/>
+          </a:fontRef>
+        </p:style>
+        <p:txBody>
+          <a:bodyPr rtlCol="0" anchor="ctr"/>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"/>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="10" name="TextBox 9"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="4343400" y="1005840"/>
+            <a:ext cx="914400" cy="1005840"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"/>
+            <a:r>
+              <a:rPr sz="4400" b="1" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>02</a:t>
+            </a:r>
+            <a:endParaRPr sz="4400" b="1" i="0">
+              <a:solidFill>
+                <a:srgbClr val="FFFFFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="11" name="TextBox 10"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="5330952" y="1051560"/>
+            <a:ext cx="2560320" cy="594360"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="l"/>
+            <a:r>
+              <a:rPr sz="2400" b="1" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>Tích hợp SAHI</a:t>
+            </a:r>
+            <a:endParaRPr sz="2400" b="1" i="0">
+              <a:solidFill>
+                <a:srgbClr val="FFFFFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="12" name="TextBox 11"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="5330952" y="1691640"/>
+            <a:ext cx="2560320" cy="1371600"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="l"/>
+            <a:r>
+              <a:rPr sz="1900" b="0" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="DDDDFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>Nâng cao phát hiện đối tượng
+nhỏ (người đi bộ xa tâm ảnh)</a:t>
+            </a:r>
+            <a:endParaRPr sz="1900" b="0" i="0">
+              <a:solidFill>
+                <a:srgbClr val="DDDDFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="13" name="Rectangle 12"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="8211311" y="914400"/>
+            <a:ext cx="3749039" cy="2331720"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:solidFill>
+            <a:srgbClr val="ED7D31"/>
+          </a:solidFill>
+          <a:ln>
+            <a:noFill/>
+          </a:ln>
+        </p:spPr>
+        <p:style>
+          <a:lnRef idx="1">
+            <a:schemeClr val="accent1"/>
+          </a:lnRef>
+          <a:fillRef idx="3">
+            <a:schemeClr val="accent1"/>
+          </a:fillRef>
+          <a:effectRef idx="2">
+            <a:schemeClr val="accent1"/>
+          </a:effectRef>
+          <a:fontRef idx="minor">
+            <a:schemeClr val="lt1"/>
+          </a:fontRef>
+        </p:style>
+        <p:txBody>
+          <a:bodyPr rtlCol="0" anchor="ctr"/>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"/>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="14" name="TextBox 13"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="8321039" y="1005840"/>
+            <a:ext cx="914400" cy="1005840"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"/>
+            <a:r>
+              <a:rPr sz="4400" b="1" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>03</a:t>
+            </a:r>
+            <a:endParaRPr sz="4400" b="1" i="0">
+              <a:solidFill>
+                <a:srgbClr val="FFFFFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="15" name="TextBox 14"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="9308591" y="1051560"/>
+            <a:ext cx="2560320" cy="594360"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="l"/>
+            <a:r>
+              <a:rPr sz="2400" b="1" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>Xây dựng Flask ITS</a:t>
+            </a:r>
+            <a:endParaRPr sz="2400" b="1" i="0">
+              <a:solidFill>
+                <a:srgbClr val="FFFFFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="16" name="TextBox 15"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="9308591" y="1691640"/>
+            <a:ext cx="2560320" cy="1371600"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="l"/>
+            <a:r>
+              <a:rPr sz="1900" b="0" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="DDDDFF"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>Ứng dụng phân tích giao thông
+với 5 module thông minh</a:t>
+            </a:r>
+            <a:endParaRPr sz="1900" b="0" i="0">
+              <a:solidFill>
+                <a:srgbClr val="DDDDFF"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="17" name="TextBox 16"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="256032" y="3401568"/>
+            <a:ext cx="11612880" cy="384048"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="45720" rIns="45720">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="l"/>
+            <a:r>
+              <a:rPr sz="1700" b="1" i="0">
+                <a:solidFill>
+                  <a:srgbClr val="28176B"/>
+                </a:solidFill>
+                <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+              </a:rPr>
+              <a:t>Phạm vi: Phát hiện 5 lớp phương tiện giao thông</a:t>
+            </a:r>
+            <a:endParaRPr sz="1700" b="1" i="0">
+              <a:solidFill>
+                <a:srgbClr val="28176B"/>
+              </a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+            </a:endParaRPr>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:graphicFrame>
+        <p:nvGraphicFramePr>
+          <p:cNvPr id="18" name="Table 17"/>
+          <p:cNvGraphicFramePr>
+            <a:graphicFrameLocks noGrp="1"/>
+          </p:cNvGraphicFramePr>
+          <p:nvPr/>
+        </p:nvGraphicFramePr>
+        <p:xfrm>
+          <a:off x="256032" y="3840480"/>
+          <a:ext cx="11676888" cy="2020824"/>
+        </p:xfrm>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">
+            <a:tbl>
+              <a:tblPr firstRow="1" bandRow="1">
+                <a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}</a:tableStyleId>
+              </a:tblPr>
+              <a:tblGrid>
+                <a:gridCol w="3200400"/>
+                <a:gridCol w="2011680"/>
+                <a:gridCol w="6464808"/>
+              </a:tblGrid>
+              <a:tr h="336804">
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="ctr"/>
+                      <a:r>
+                        <a:rPr sz="1400" b="1" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="FFFFFF"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Lớp đối tượng</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1400" b="1" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="FFFFFF"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="28176B"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="ctr"/>
+                      <a:r>
+                        <a:rPr sz="1400" b="1" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="FFFFFF"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Tỷ lệ trong dataset</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1400" b="1" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="FFFFFF"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="28176B"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="ctr"/>
+                      <a:r>
+                        <a:rPr sz="1400" b="1" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="FFFFFF"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Đặc điểm / Thách thức</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1400" b="1" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="FFFFFF"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="28176B"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+              </a:tr>
+              <a:tr h="336804">
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Car (Ô tô)</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="E8EFF8"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>~45%</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="E8EFF8"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Phổ biến nhất, kích thước trung bình</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="E8EFF8"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+              </a:tr>
+              <a:tr h="336804">
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Bus (Xe buýt)</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="FFFFFF"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>~8%</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="FFFFFF"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Đối tượng lớn, dễ phát hiện</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="FFFFFF"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+              </a:tr>
+              <a:tr h="336804">
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Truck (Xe tải)</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="E8EFF8"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>~12%</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="E8EFF8"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Tỷ lệ dài/rộng bất thường</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="E8EFF8"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+              </a:tr>
+              <a:tr h="336804">
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Pedestrian (Người đi bộ)</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="FFFFFF"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>~20%</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="FFFFFF"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Thách thức nhất — nhỏ &amp; bị che khuất</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="FFFFFF"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+              </a:tr>
+              <a:tr h="336804">
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Motorbike (Xe máy)</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="E8EFF8"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>~15%</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="E8EFF8"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+                <a:tc>
+                  <a:txBody>
+                    <a:bodyPr wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="l"/>
+                      <a:r>
+                        <a:rPr sz="1300" b="0" i="0">
+                          <a:solidFill>
+                            <a:srgbClr val="44546A"/>
+                          </a:solidFill>
+                          <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                        </a:rPr>
+                        <a:t>Phổ biến ở Việt Nam, nhỏ</a:t>
+                      </a:r>
+                      <a:endParaRPr sz="1300" b="0" i="0">
+                        <a:solidFill>
+                          <a:srgbClr val="44546A"/>
+                        </a:solidFill>
+                        <a:latin typeface="Calibri" panose="020F0502020204030204"/>
+                      </a:endParaRPr>
+                    </a:p>
+                  </a:txBody>
+                  <a:tcPr marL="54864" marR="54864" marT="27432" marB="27432">
+                    <a:solidFill>
+                      <a:srgbClr val="E8EFF8"/>
+                    </a:solidFill>
+                  </a:tcPr>
+                </a:tc>
+              </a:tr>
+            </a:tbl>
+          </a:graphicData>
+        </a:graphic>
+      </p:graphicFrame>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="19" name="Rectangle 18"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="0" y="6629400"/>
+            <a:ext cx="12188952" cy="228600"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:solidFill>
+            <a:srgbClr val="ED7D31"/>
+          </a:solidFill>
+          <a:ln>
+            <a:noFill/>
+          </a:ln>
+        </p:spPr>
+        <p:style>
+          <a:lnRef idx="1">
+            <a:schemeClr val="accent1"/>
+          </a:lnRef>
+          <a:fillRef idx="3">
+            <a:schemeClr val="accent1"/>
+          </a:fillRef>
+          <a:effectRef idx="2">
+            <a:schemeClr val="accent1"/>
+          </a:effectRef>
+          <a:fontRef idx="minor">
+            <a:schemeClr val="lt1"/>
+          </a:fontRef>
+        </p:style>
+        <p:txBody>
+          <a:bodyPr rtlCol="0" anchor="ctr"/>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"/>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+
+      <p:pic>
+        <p:nvPicPr>
+          <p:cNvPr id="20" name="Objective Workflow" descr="fig_wf_muctieu.png"/>
+          <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>
+          <p:nvPr/>
+        </p:nvPicPr>
+        <p:blipFill>
+          <a:blip r:embed="rId10"/>
+          <a:stretch><a:fillRect/></a:stretch>
+        </p:blipFill>
+        <p:spPr>
+          <a:xfrm><a:off x="400000" y="4650000"/><a:ext cx="11400000" cy="1900000"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+      </p:pic>
+    </p:spTree>
+  </p:cSld>
+  <p:clrMapOvr>
+    <a:masterClrMapping/>
+  </p:clrMapOvr>
+</p:sld>

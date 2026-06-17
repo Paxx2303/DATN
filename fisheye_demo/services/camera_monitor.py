@@ -138,6 +138,7 @@ class ExternalCameraLiveMonitor:
 
         # Per-camera analytics state (reset on start())
         self._camera_trackers: dict[str, _CentroidTracker] = {}
+        self._camera_unique_ids: dict[str, set] = {}   # cam_key → set of track_ids seen this session
         self._camera_speed_estimators: dict = {}       # cam_key → SpeedEstimator
         self._camera_congestion_detectors: dict = {}   # cam_key → CongestionDetector
         self._camera_congestion: dict[str, dict] = {}  # cam_key → last congestion result
@@ -202,6 +203,7 @@ class ExternalCameraLiveMonitor:
 
             # Reset per-camera analytics on every (re)start
             self._camera_trackers.clear()
+            self._camera_unique_ids.clear()
             self._camera_speed_estimators.clear()
             self._camera_congestion_detectors.clear()
             self._camera_congestion.clear()
@@ -367,6 +369,12 @@ class ExternalCameraLiveMonitor:
                         self._camera_trackers[cam_key] = _CentroidTracker()
                     tracked, det_assignments = self._camera_trackers[cam_key].update(dets)
 
+                    # Unique vehicle counting — accumulate track_ids seen this session
+                    if cam_key not in self._camera_unique_ids:
+                        self._camera_unique_ids[cam_key] = set()
+                    self._camera_unique_ids[cam_key].update(tracked.keys())
+                    unique_count = len(self._camera_unique_ids[cam_key])
+
                     # Ước tính vận tốc từng xe (chỉ để HIỂN THỊ — không sinh vi phạm/alert).
                     fps_equiv = 1.0 / max(interval_s, 0.5)
                     if cam_key not in self._camera_speed_estimators:
@@ -500,6 +508,7 @@ class ExternalCameraLiveMonitor:
                         "name":          cam_key,
                         "index":         entry.camera_index,
                         "count":         count,
+                        "unique_count":  unique_count,
                         "avg_speed_kmh": avg_speed,
                         "max_speed_kmh": max_speed,
                         "vehicle_speeds": [

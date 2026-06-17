@@ -33,7 +33,8 @@ function getLivePollMs(intervalSeconds = 0.5, actualCycleMs = null) {
 }
 
 export async function loadExternalCamera(urlOverride = null) {
-  const normalizedUrl = normalizeExternalCameraUrl(urlOverride ?? "https://camera.0511.vn/camera.html");
+  const rawUrl = urlOverride ?? elements.externalCameraUrl?.value?.trim() ?? "";
+  const normalizedUrl = normalizeExternalCameraUrl(rawUrl || "https://camera.0511.vn/camera.html");
   if (!normalizedUrl) { setToast("Nhập URL camera hợp lệ."); return; }
   if (elements.externalCameraUrl) elements.externalCameraUrl.value = normalizedUrl;
   elements.externalCameraOpen.href = normalizedUrl;
@@ -80,16 +81,18 @@ function formatCameraSpeedBadge(camera) {
 
 function formatCameraMeta(camera) {
   const count = camera.total_objects ?? camera.count ?? 0;
+  const unique = camera.unique_count;
+  const uniqueSuffix = unique != null && unique > count ? ` (${unique} phiên)` : "";
   const speeds = camera.vehicle_speeds || [];
   if (!speeds.length) {
-    return `${count} xe`;
+    return `${count} xe${uniqueSuffix}`;
   }
   const speedText = speeds
     .slice(0, 3)
     .map((item) => `${item.class_name} ${Number(item.speed_kmh).toFixed(0)}km/h`)
     .join(" · ");
   const suffix = speeds.length > 3 ? " · ..." : "";
-  return `${count} xe · ${speedText}${suffix}`;
+  return `${count} xe${uniqueSuffix} · ${speedText}${suffix}`;
 }
 
 // ── Camera grid (snapshot + live non-stream mode) ───────────────────────────
@@ -324,11 +327,14 @@ function renderExternalCameraLiveStatus(data, options = {}) {
   }
   const avgSpd = data.speed_summary?.avg_kmh ?? 0;
   const maxSpd = data.speed_summary?.max_kmh ?? 0;
+  const device = data.config?.device || "";
+  const deviceLabel = device && device !== "cpu" ? `GPU (${device})` : (device === "cpu" ? "CPU" : "");
+  const deviceBadge = deviceLabel ? ` | <span style="color:${device !== 'cpu' ? 'var(--color-text-success)' : 'var(--color-text-secondary)'}">${deviceLabel}</span>` : "";
   const errorBlock = data.error ? `<span style="color:var(--color-text-danger)">⚠ ${escapeHtml(data.error)}</span>` : "";
 
   elements.externalCameraLiveStatus.innerHTML = `
     <strong>Live monitor ${statusLabel}</strong>
-    <span>Cycle ${interval.toFixed(1)}s | ${displayFps} fps (ảnh mới nhất) | ${cycleDurMs} ms/chu kỳ | Cycles: ${cycleCount}</span>
+    <span>Cycle ${interval.toFixed(1)}s | ${displayFps} fps | ${cycleDurMs} ms/chu kỳ | Cycles: ${cycleCount}${deviceBadge}</span>
     <span>Speed TB: ${avgSpd > 0 ? avgSpd.toFixed(1) + " km/h" : "—"} | Max: ${maxSpd > 0 ? maxSpd.toFixed(1) + " km/h" : "—"} | Congestion: ${(data.congestion_summary?.level || "—").toUpperCase()} | Updated: ${lastUpdated}</span>
     ${errorBlock}
   `;
@@ -402,9 +408,13 @@ function renderExternalCameraLiveStatus(data, options = {}) {
 function buildExternalCameraFormData() {
   const formData = new FormData();
   const sourceLayout = elements.sourceLayout.value;
-  formData.append("external_camera_url", "https://camera.0511.vn/camera.html");
+  const urlValue = (elements.externalCameraUrl?.value || "").trim() || "https://camera.0511.vn/camera.html";
+  const isStream = /\.(m3u8|mp4|ts|mjpeg)$/i.test(urlValue) || /^(rtsp|rtmp):\/\//i.test(urlValue);
+  formData.append("external_camera_url", urlValue);
+  formData.append("source_mode", isStream ? "stream" : "snapshot");
+  if (isStream) formData.append("stream_url", urlValue);
   // Thiết bị do backend tự chọn (GPU nếu có, không thì CPU). Xử lý tối đa 2 camera.
-  formData.append("camera_limit", "2");
+  formData.append("camera_limit", isStream ? "1" : "2");
   formData.append("model_key", elements.modelKey.value);
   formData.append("conf", elements.confidence.value);
   formData.append("iou", elements.iou.value);
