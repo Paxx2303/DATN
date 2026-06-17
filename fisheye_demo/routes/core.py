@@ -89,7 +89,7 @@ def index():
         fisheye_effect_choices=fisheye_effect_choices,
         selectable_models=selectable_models,
         default_model_key=Config.DEFAULT_MODEL_KEY,
-        external_camera_url="https://webcam.vn",
+        external_camera_url="https://camera.0511.vn/camera.html",
         external_camera_live_interval_seconds=Config.EXT_CAM_INTERVAL,
     )
 

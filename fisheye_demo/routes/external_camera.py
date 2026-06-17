@@ -52,9 +52,6 @@ def get_camera_source():
     elif any(parsed.path.lower().endswith(ext) for ext in (".m3u8", ".mp4", ".ts", ".mjpeg")) or parsed.scheme in ("rtsp", "rtmp"):
         source_mode = "stream"
         title = "Direct Live Stream Source"
-    elif "webcam.vn" in parsed.netloc:
-        title = "Webcam.vn Traffic Portal"
-        source_mode = "snapshot"
     else:
         title = parsed.netloc or "Traffic Webcam Website"
         source_mode = "snapshot"

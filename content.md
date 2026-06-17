@@ -244,29 +244,18 @@ flowchart LR
 
 **Công nghệ:** Flask 3.x · Python 3.10 · YOLOv11 · OpenCV · EasyOCR · SQLite/PostgreSQL · Docker · GCP
 
-```mermaid
-graph TD
-    Browser["🖥️ Trình duyệt SPA\nVanilla JS · Bootstrap 5\nDashboard / Workspace / TOC / ALPR"]
+| Tầng | Khối | Thành phần chính | Vai trò |
+|------|------|-----------------|---------|
+| **Giao diện** | Trình duyệt SPA | Vanilla JS · Bootstrap 5 | Dashboard / Workspace / TOC / ALPR |
+| **Ứng dụng** | Flask Factory | `app.py` · `create_app()` | Khởi tạo Config → DB → Blueprints → Logging |
+| **Định tuyến** | Blueprints cốt lõi | `core` · `detect` · `history` · `external_camera` | Nhận request, phân luồng xử lý |
+| **Định tuyến** | Routes mở rộng | `routes_extended.py` | Analytics · Alerts · Speed · ALPR · Export |
+| **Dịch vụ** | Services Layer | `model_registry` · `inference` · `camera_monitor` | Quản lý model, suy luận, camera live |
+| **Nghiệp vụ** | Business Modules | `video_detect` · `fisheye` · `speed_estimator` · `line_counter` · `incident_detector` | Xử lý đặc thù từng tính năng |
+| **Dữ liệu** | DB Layer | `db.py` · SQLite / PostgreSQL · `recent_image_store` | Lưu trữ kết quả, lịch sử, ảnh gần nhất |
 
-    Flask["⚙️ Flask Application Factory\napp.py · create_app()\nConfig → DB → Blueprints → Logging"]
-
-    Routes["📌 Blueprints\ncore · detect · history\nexternal_camera · examples"]
-    RoutesExt["📌 routes_extended.py\nanalytics · alerts · incidents\nspeed · congestion · ALPR · export"]
-
-    Services["🔧 Services Layer\nmodel_registry · inference\ncamera_monitor"]
-
-    Modules["📦 Business Modules\nvideo_detect · fisheye\nspeed_estimator · line_counter\ncongestion_detector · incident_detector · alpr"]
-
-    DB["🗄️ db.py\nSQLite / PostgreSQL\n+ recent_image_store"]
-
-    Browser -- "HTTP / JSON" --> Flask
-    Flask --> Routes
-    Flask --> RoutesExt
-    Routes --> Services
-    RoutesExt --> Services
-    Services --> Modules
-    Modules --> DB
-```
+**Luồng dữ liệu chính:**
+> Trình duyệt → *(HTTP/JSON)* → Flask → Blueprints → Services → Modules → DB
 
 ---
 
