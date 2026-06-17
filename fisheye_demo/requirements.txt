@@ -36,6 +36,9 @@ yt-dlp>=2024.8.6
 # Tự tải model OCR ở lần chạy đầu (cần internet). Nếu thiếu, feature ALPR
 # tự tắt (degrade gracefully), phần còn lại của hệ thống vẫn chạy bình thường.
 easyocr>=1.7.1
+# Engine ALPR 2 tầng tùy chọn (plate-detector + OCR chuyên biển). Bật bằng
+# ALPR_ENGINE=fast_alpr. Tự tải model ONNX lần đầu (cần internet). Thiếu → fallback EasyOCR.
+fast-alpr>=0.1.0
 
 # --- Utilities ---
 python-dotenv>=1.0.1

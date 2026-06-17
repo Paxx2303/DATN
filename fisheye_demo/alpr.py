@@ -217,5 +217,88 @@ def annotate_plates_on_frame(frame_bgr: np.ndarray, plates: list[dict]) -> np.nd
     return frame_bgr
 
 
+class FastALPRRecognizer:
+    """
+    Engine ALPR 2 tầng dùng fast-alpr: YOLO phát hiện BIỂN SỐ riêng + OCR chuyên biển.
+    Tốt hơn EasyOCR thô (không cần crop vùng xe). Lazy + optional (fallback nếu thiếu).
+    Cùng interface với PlateRecognizer: is_available(), recognize(frame_bgr, vehicle_boxes).
+    """
+
+    def __init__(self):
+        self._alpr = None
+        self._init_failed = False
+        self._lock = threading.Lock()
+
+    def _ensure(self):
+        if self._alpr is not None or self._init_failed:
+            return self._alpr
+        with self._lock:
+            if self._alpr is not None or self._init_failed:
+                return self._alpr
+            try:
+                from fast_alpr import ALPR
+                self._alpr = ALPR(
+                    detector_model="yolo-v9-t-384-license-plate-end2end",
+                    ocr_model="global-plates-mobile-vit-v2-model",
+                )
+                logger.info("fast-alpr engine initialised")
+            except Exception as exc:
+                self._init_failed = True
+                logger.warning("fast-alpr không khả dụng: %s", exc)
+            return self._alpr
+
+    def is_available(self) -> bool:
+        return self._ensure() is not None
+
+    def recognize(self, frame_bgr: np.ndarray,
+                  vehicle_boxes: Optional[list] = None) -> list[dict]:
+        """fast-alpr tự phát hiện biển trên cả frame (không cần vehicle_boxes)."""
+        alpr = self._ensure()
+        if alpr is None or frame_bgr is None:
+            return []
+        try:
+            results = alpr.predict(frame_bgr)
+        except Exception as exc:
+            logger.debug("fast-alpr predict error: %s", exc)
+            return []
+        plates: list[dict] = []
+        seen: set[str] = set()
+        for r in results:
+            ocr = getattr(r, "ocr", None)
+            if ocr is None or not getattr(ocr, "text", None):
+                continue
+            raw = ocr.text
+            plate = normalize_vn_plate(raw) or re.sub(r"[^A-Za-z0-9]", "", raw).upper()
+            if not plate or plate in seen:
+                continue
+            seen.add(plate)
+            c = ocr.confidence
+            conf = float(np.mean(c)) if isinstance(c, (list, tuple)) else float(c)
+            bb = r.detection.bounding_box
+            plates.append({
+                "plate": plate,
+                "confidence": round(conf, 3),
+                "bbox": [int(bb.x1), int(bb.y1), int(bb.x2), int(bb.y2)],
+                "vehicle_type": "unknown",
+            })
+        return plates
+
+
+def _select_recognizer():
+    """Chọn engine ALPR theo env ALPR_ENGINE (fast_alpr|easyocr). Fallback EasyOCR."""
+    import os
+    # Mặc định EasyOCR (đã chứng minh ổn định). Đặt ALPR_ENGINE=fast_alpr để thử
+    # engine 2 tầng (plate-detector + OCR chuyên biển) — tốt hơn ở ảnh cận cảnh THẬT.
+    engine = os.getenv("ALPR_ENGINE", "easyocr").strip().lower()
+    if engine in ("fast_alpr", "fastalpr", "fast-alpr"):
+        try:
+            import fast_alpr  # noqa: F401 — chỉ kiểm tra đã cài
+            logger.info("ALPR engine = fast-alpr")
+            return FastALPRRecognizer()
+        except ImportError:
+            logger.warning("fast-alpr chưa cài → dùng EasyOCR")
+    return PlateRecognizer()
+
+
 # Singleton dùng chung toàn hệ thống
-plate_recognizer = PlateRecognizer()
+plate_recognizer = _select_recognizer()

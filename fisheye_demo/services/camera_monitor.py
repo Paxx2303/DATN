@@ -367,11 +367,27 @@ class ExternalCameraLiveMonitor:
                         self._camera_trackers[cam_key] = _CentroidTracker()
                     tracked, det_assignments = self._camera_trackers[cam_key].update(dets)
 
-                    # Live KHÔNG đánh giá tốc độ (bỏ theo yêu cầu) — giảm tải vòng lặp.
+                    # Ước tính vận tốc từng xe (chỉ để HIỂN THỊ — không sinh vi phạm/alert).
                     fps_equiv = 1.0 / max(interval_s, 0.5)
+                    if cam_key not in self._camera_speed_estimators:
+                        self._camera_speed_estimators[cam_key] = SpeedEstimator(
+                            fps=fps_equiv, scale_factor=Config.SPEED_SCALE_FACTOR,
+                        )
+                    speed_est = self._camera_speed_estimators[cam_key]
+                    _tid_to_class = {
+                        det_assignments[di]: dets[di].get("class_name", "unknown")
+                        for di in range(len(dets)) if di in det_assignments
+                    }
                     track_speeds: dict[int, float] = {}
-                    avg_speed = 0.0
-                    max_speed = 0.0
+                    for tid, (cx, cy) in tracked.items():
+                        sp = speed_est.update_single(
+                            tid, cx, cy, self._cycle_count,
+                            _tid_to_class.get(tid, "unknown"),
+                        )
+                        if sp and sp > 0:
+                            track_speeds[tid] = sp
+                    avg_speed = speed_est.get_average_speed()
+                    max_speed = speed_est.get_max_speed()
 
                     # Line counter — update per tracked detection
                     for det_idx, det in enumerate(dets):
@@ -452,9 +468,10 @@ class ExternalCameraLiveMonitor:
                         plate_recognizer, entry.snapshot, dets, cam_key, database,
                     )
 
-                    # Annotate frame with per-vehicle speed labels
+                    # Annotate frame — hiện vận tốc thay cho confidence (live)
                     annotated = draw_detections_on_image(
                         entry.snapshot, detections_with_speed, speed_data=detection_speeds,
+                        speed_as_label=True,
                     )
                     # Draw recognised plates (gold boxes + text) on top
                     if cam_plates:

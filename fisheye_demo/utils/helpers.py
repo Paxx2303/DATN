@@ -193,6 +193,7 @@ def draw_detections_on_image(
     detections: list[dict],
     name_map: Optional[dict] = None,
     speed_data: Optional[dict] = None,
+    speed_as_label: bool = False,
 ) -> Image.Image:
     """
     Vẽ bounding boxes và labels lên ảnh PIL.
@@ -236,11 +237,16 @@ def draw_detections_on_image(
         # Bounding box
         cv2.rectangle(img_array, (x1, y1), (x2, y2), color, 2)
         
-        text = f"{label} {conf:.2f}"
         speed = speed_data.get(idx)
         if speed is None or speed <= 0:
             speed = det.get("speed_kmh", 0.0)
         has_speed = speed is not None and speed > 0
+
+        if speed_as_label:
+            # Live: hiện vận tốc thay cho confidence
+            text = f"{label} {speed:.0f} km/h" if has_speed else label
+        else:
+            text = f"{label} {conf:.2f}"
 
         font_scale = 0.5
         font_thickness = 1
@@ -260,7 +266,7 @@ def draw_detections_on_image(
             cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness,
         )
 
-        if has_speed:
+        if has_speed and not speed_as_label:
             speed_text = f"{speed:.0f} km/h"
             speed_scale = 0.62
             (sw, sh), sbase = cv2.getTextSize(
