@@ -34,6 +34,8 @@ jobs:
             --project=project-d9243352-39fe-44a5-90d \
             --command='
               set -e
+              command -v git  >/dev/null 2>&1 || sudo apt-get install -y git
+              command -v docker >/dev/null 2>&1 || (curl -fsSL https://get.docker.com | sudo sh)
               if [ ! -d "$HOME/DATN" ]; then
                 git clone https://github.com/Paxx2303/DATN.git "$HOME/DATN"
               fi
