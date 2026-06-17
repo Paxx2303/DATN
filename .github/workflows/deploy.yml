@@ -32,12 +32,19 @@ jobs:
           gcloud compute ssh instance-20260617-184557 \
             --zone=asia-east1-a \
             --project=project-d9243352-39fe-44a5-90d \
-            --command="
-              if [ ! -d 'DATN' ]; then
-                git clone https://github.com/Paxx2303/DATN.git
-                cd DATN
-              else
-                cd DATN
-                git pull origin main
+            --command='
+              set -e
+              if [ ! -d "$HOME/DATN" ]; then
+                git clone https://github.com/Paxx2303/DATN.git "$HOME/DATN"
               fi
-            "
+              cd "$HOME/DATN"
+              git pull origin main
+
+              echo "=== Disk TRUOC khi don ==="; df -h /
+              sudo docker compose -f deploy/docker-compose.prod.yml down --remove-orphans || true
+              sudo docker system prune -af || true
+              sudo docker builder prune -af || true
+              echo "=== Disk SAU khi don ==="; df -h /
+
+              sudo docker compose -f deploy/docker-compose.prod.yml up --build -d
+            '
