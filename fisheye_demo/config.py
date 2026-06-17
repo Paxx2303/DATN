@@ -83,8 +83,6 @@ class Config:
     DEFAULT_MODEL_KEY = os.getenv("DEFAULT_MODEL", "traffic")
     AVAILABLE_MODELS  = {
         "traffic": str(MODEL_FOLDER / "traffic.pt"),
-        "nano":    str(MODEL_FOLDER / "yolo11n.pt"),
-        "best":    str(MODEL_FOLDER / "yolo11_fisheye_v5_best.pt"),
     }
     DEFAULT_CONF      = float(_env("YOLO_CONF", "FISHEYE_DEFAULT_CONF", default="0.35"))
     DEFAULT_IOU       = float(_env("YOLO_IOU", "FISHEYE_DEFAULT_IOU", default="0.45"))

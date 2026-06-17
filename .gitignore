@@ -24,6 +24,7 @@ env/
 *.pth
 *.onnx
 *.engine
+!fisheye_demo/traffic.pt
 
 # ─── Database / dữ liệu runtime ───────────────────────────
 *.db
