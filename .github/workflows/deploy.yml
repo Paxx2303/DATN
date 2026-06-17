@@ -43,10 +43,10 @@ jobs:
               git pull origin main
 
               echo "=== Disk TRUOC khi don ==="; df -h /
-              sudo docker compose -f fisheye_demo/deploy/docker-compose.prod.yml down --remove-orphans || true
+              sudo docker compose -f fisheye_demo/deploy/docker-compose.prod-cpu.yml down --remove-orphans || true
               sudo docker system prune -af || true
               sudo docker builder prune -af || true
               echo "=== Disk SAU khi don ==="; df -h /
 
-              sudo docker compose -f fisheye_demo/deploy/docker-compose.prod.yml up --build -d
+              sudo docker compose -f fisheye_demo/deploy/docker-compose.prod-cpu.yml up --build -d
             '
