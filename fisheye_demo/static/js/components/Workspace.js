@@ -40,12 +40,13 @@ export function initWorkspace(classNames, classColors, onJobCompleted) {
   });
 
   // Range and text inputs
-  [
-    elements.confidence,
-    elements.iou,
-    elements.fisheyeStrength,
-    elements.fisheyeRadius,
-  ].forEach((element) => element.addEventListener("input", updateControlLabels));
+  [elements.confidence, elements.iou].forEach(
+    (element) => element.addEventListener("input", updateControlLabels),
+  );
+
+  // Update hint text when source layout changes
+  updateSourceLayoutHint();
+  elements.sourceLayout.addEventListener("change", updateSourceLayoutHint);
 
   // Trigger buttons
   elements.detectBtn.addEventListener("click", () => runDetection(classNames, classColors, onJobCompleted));
@@ -158,6 +159,15 @@ export function clearCurrentFile() {
   resetResultView();
   setLoading(false, appState);
   updateButtonsForCurrentFile();
+}
+
+function updateSourceLayoutHint() {
+  const hint = document.getElementById("source-layout-hint");
+  if (!hint) return;
+  const isNormal = elements.sourceLayout.value === "normal";
+  hint.textContent = isNormal
+    ? "Ảnh sẽ được convert sang fisheye trước khi detect."
+    : "Ảnh đã là fisheye — detect trực tiếp, không convert.";
 }
 
 function updateButtonsForCurrentFile() {

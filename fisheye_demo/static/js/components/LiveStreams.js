@@ -548,7 +548,16 @@ function updateLiveStatsBar(data, liveResult) {
   const congEl = document.getElementById("live-stat-congestion");
   const camEl = document.getElementById("live-stat-cameras");
   const cycleEl = document.getElementById("live-stat-cycle");
+  const deviceEl = document.getElementById("live-stat-device");
 
+  if (deviceEl) {
+    const device = data.config?.device || "";
+    const isGpu = device && device !== "cpu";
+    deviceEl.className = `badge ${isGpu ? "b-green" : "b-gray"}`;
+    const icon = isGpu ? "ti-bolt" : "ti-cpu";
+    const label = isGpu ? `GPU (${device})` : (device === "cpu" ? "CPU" : "—");
+    deviceEl.innerHTML = `<i class="ti ${icon}" style="margin-right:4px;"></i>${escapeHtml(label)}`;
+  }
   if (vehicleEl) vehicleEl.innerHTML = `<i class="ti ti-car" style="margin-right:4px;"></i>${vehicles} xe`;
   if (speedEl) {
     const speedLabel = maxSpd > 0
@@ -589,11 +598,52 @@ function updateLiveAlprPanel(data, running) {
     list.innerHTML = '<div style="font-size:11px; color:var(--color-text-tertiary);">Đang quét… chưa đọc được biển số nào.</div>';
     return;
   }
-  list.innerHTML = recent.map((p) => `
-    <span class="badge b-amber" style="font-family:monospace; padding:5px 9px;" title="${escapeHtml(p.vehicle_type || "")} · ${escapeHtml(p.camera || "")} · ${escapeHtml(p.time || "")}">
-      ${escapeHtml(p.plate)} · ${(Number(p.confidence) * 100).toFixed(0)}%
-      <span style="opacity:.7; font-family:inherit;"> ${escapeHtml(p.camera || "")}</span>
-    </span>`).join("");
+  list.innerHTML = recent.map((p) => {
+    const conf = (Number(p.confidence) * 100).toFixed(0);
+    const meta = `${escapeHtml(p.vehicle_type || "")} · ${escapeHtml(p.camera || "")} · ${escapeHtml(p.time || "")}`;
+    const crop = p.crop_b64
+      ? `<img class="plate-crop-thumb" src="${p.crop_b64}" alt="${escapeHtml(p.plate)}"
+            data-plate="${escapeHtml(p.plate)}" data-conf="${conf}" data-meta="${meta}"
+            style="display:block; width:100%; max-width:140px; border-radius:4px; cursor:zoom-in; border:1px solid var(--color-border-tertiary);" />`
+      : "";
+    return `
+      <div class="plate-card" style="display:flex; flex-direction:column; gap:3px; align-items:flex-start;">
+        ${crop}
+        <span class="badge b-amber" style="font-family:monospace; padding:4px 8px; font-size:11px;" title="${meta}">
+          ${escapeHtml(p.plate)} · ${conf}%
+        </span>
+      </div>`;
+  }).join("");
+
+  // Click thumbnail → zoom modal
+  list.querySelectorAll(".plate-crop-thumb").forEach((img) => {
+    img.addEventListener("click", () => openPlateZoom(
+      img.src, img.dataset.plate, img.dataset.conf, img.dataset.meta,
+    ));
+  });
+}
+
+function openPlateZoom(src, plate, conf, meta) {
+  let modal = document.getElementById("plate-zoom-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "plate-zoom-modal";
+    modal.style.cssText =
+      "position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center;" +
+      "background:rgba(0,0,0,.78); cursor:zoom-out; padding:24px;";
+    modal.addEventListener("click", () => { modal.style.display = "none"; });
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+      <img src="${src}" alt="${escapeHtml(plate || "")}"
+        style="max-width:90vw; max-height:70vh; image-rendering:pixelated; border-radius:8px; border:2px solid #ffd700;" />
+      <div style="font-family:monospace; font-size:22px; font-weight:700; color:#ffd700;">
+        ${escapeHtml(plate || "")} · ${escapeHtml(String(conf || ""))}%
+      </div>
+      <div style="font-size:12px; color:#ccc;">${escapeHtml(meta || "")}</div>
+    </div>`;
+  modal.style.display = "flex";
 }
 
 function resetDownloads() {

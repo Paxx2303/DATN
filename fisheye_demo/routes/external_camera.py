@@ -301,7 +301,8 @@ def start_monitor():
         alpr_every     = int(data.get("alpr_every", Config.ALPR_LIVE_EVERY)),
     )
     
-    return jsonify({"message": "Monitor started", "status": status}), 200
+    status["message"] = "Monitor started"
+    return jsonify(status), 200
 
 
 @ext_cam_bp.route("/stop", methods=["POST"])

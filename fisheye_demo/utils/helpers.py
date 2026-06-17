@@ -155,8 +155,8 @@ def read_uploaded_image(file_storage) -> Optional[Image.Image]:
 def apply_preprocessing(
     image: Image.Image,
     enabled: bool = False,
-    strength: float = 0.6,
-    radius: float = 0.85,
+    strength: float = 1.0,
+    radius: float = 1.0,
     effect: str = "standard",
     center_x: float = 0.5,
     center_y: float = 0.5,
@@ -167,7 +167,7 @@ def apply_preprocessing(
     """
     if not enabled:
         return image
-    
+
     from fisheye import apply_fisheye
     return apply_fisheye(
         image,
@@ -176,6 +176,7 @@ def apply_preprocessing(
         effect=effect,
         center_x=center_x,
         center_y=center_y,
+        full_frame=True,  # giữ nguyên kích thước, không mask góc đen
     )
 
 

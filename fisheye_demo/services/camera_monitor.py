@@ -10,6 +10,7 @@ THIẾT KẾ:
 """
 
 import io
+import base64
 import time
 import threading
 import logging
@@ -298,7 +299,13 @@ class ExternalCameraLiveMonitor:
                         entries = [e]
 
                 if not entries:
-                    logger.debug("No camera entries available; waiting...")
+                    src = cfg.get("source_url") or cfg.get("stream_url") or "?"
+                    msg = f"Không lấy được camera từ nguồn: {src}"
+                    logger.warning("%s (cycle %d)", msg, self._cycle_count)
+                    self._last_error = msg
+                    self._stream_frames["overview"] = _placeholder_jpeg(msg)
+                    self._cycle_count += 1
+                    self._last_updated_at = datetime.now().isoformat()
                     time.sleep(interval_s)
                     continue
 
@@ -311,6 +318,7 @@ class ExternalCameraLiveMonitor:
                             strength=prep.get("strength", Config.FISHEYE_STRENGTH),
                             radius=prep.get("radius",   Config.FISHEYE_RADIUS),
                             effect=prep.get("effect",   Config.FISHEYE_EFFECT),
+                            full_frame=True,  # giữ nguyên kích thước, không mask góc đen
                         )
 
                 valid = [e for e in entries if e.snapshot is not None]
@@ -651,6 +659,10 @@ class ExternalCameraLiveMonitor:
             return []
 
         from datetime import datetime as _dt
+        # Crop vùng biển số để zoom hiển thị trên UI
+        for p in plates:
+            p["crop_b64"] = _crop_plate_b64(bgr, p.get("bbox"))
+
         dedup_window = max(20, every * 10)   # số chu kỳ coi là "trùng"
         for p in plates:
             key = f"{cam_key}|{p['plate']}"
@@ -674,6 +686,7 @@ class ExternalCameraLiveMonitor:
                 "vehicle_type": p.get("vehicle_type", "unknown"),
                 "camera":       cam_key,
                 "time":         _dt.now().strftime("%H:%M:%S"),
+                "crop_b64":     p.get("crop_b64", ""),
             })
         if len(self._live_plates) > 60:
             self._live_plates = self._live_plates[-60:]
@@ -757,15 +770,62 @@ def _draw_plates_on_pil(img: Image.Image, plates: list[dict]) -> Image.Image:
     return img
 
 
+def _crop_plate_b64(bgr: np.ndarray, bbox, zoom: int = 3, pad: float = 0.15) -> str:
+    """Crop vùng biển số từ ảnh BGR, phóng to và trả về data-URI base64 (JPEG)."""
+    try:
+        if bbox is None or len(bbox) < 4:
+            return ""
+        h, w = bgr.shape[:2]
+        x1, y1, x2, y2 = (int(v) for v in bbox[:4])
+        # padding quanh box để thấy rõ biển
+        bw, bh = x2 - x1, y2 - y1
+        x1 = max(0, int(x1 - bw * pad)); y1 = max(0, int(y1 - bh * pad))
+        x2 = min(w, int(x2 + bw * pad)); y2 = min(h, int(y2 + bh * pad))
+        if x2 <= x1 or y2 <= y1:
+            return ""
+        crop = bgr[y1:y2, x1:x2][:, :, ::-1]  # BGR → RGB
+        pil = Image.fromarray(crop.astype(np.uint8))
+        # phóng to để dễ đọc, giới hạn chiều rộng
+        new_w = min(360, pil.width * zoom)
+        new_h = max(1, int(pil.height * new_w / max(pil.width, 1)))
+        pil = pil.resize((new_w, new_h), Image.LANCZOS)
+        b64 = base64.b64encode(_pil_to_jpeg_bytes(pil, quality=85)).decode("ascii")
+        return f"data:image/jpeg;base64,{b64}"
+    except Exception as exc:
+        logger.debug("_crop_plate_b64 error: %s", exc)
+        return ""
+
+
 def _pil_to_jpeg_bytes(img: Image.Image, quality: int = 80) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=quality)
     return buf.getvalue()
 
 
-def _placeholder_jpeg() -> bytes:
-    """Black 320×240 placeholder frame."""
-    return _pil_to_jpeg_bytes(Image.new("RGB", (320, 240), color=(15, 15, 25)))
+def _placeholder_jpeg(text: str = "") -> bytes:
+    """Dark placeholder frame, optionally with a status/error message."""
+    img = Image.new("RGB", (640, 360), color=(15, 15, 25))
+    if text:
+        try:
+            from PIL import ImageDraw
+            draw = ImageDraw.Draw(img)
+            # wrap text thô theo ~46 ký tự/dòng
+            lines, line = [], ""
+            for word in text.split():
+                if len(line) + len(word) + 1 > 46:
+                    lines.append(line)
+                    line = word
+                else:
+                    line = f"{line} {word}".strip()
+            if line:
+                lines.append(line)
+            y = 160
+            for ln in lines[:4]:
+                draw.text((20, y), ln, fill=(255, 120, 120))
+                y += 16
+        except Exception:
+            pass
+    return _pil_to_jpeg_bytes(img)
 
 
 # Singleton

@@ -230,13 +230,8 @@
                 <input class="hidden-input" id="file-input" type="file" accept="image/*,video/*">
               </div>
 
-              <!-- Example images quick-load strip -->
-              <div style="margin-bottom:12px;">
-                <div class="metric-label" style="font-size:9.5px; margin-bottom:6px; display:block;">
-                  <i class="ti ti-photo" style="margin-right:3px;"></i> Ảnh ví dụ nhanh
-                </div>
-                <div class="example-strip" id="example-strip"></div>
-              </div>
+              <!-- example-strip removed -->
+              <div id="example-strip" style="display:none;"></div>
 
               <div class="meta-box" style="display:flex; flex-direction:column; gap:4px; font-size:11.5px;">
                 <div class="df"><span class="df-l">Selected file</span><span class="df-v" id="selected-file">none</span></div>
@@ -252,17 +247,16 @@
               <div style="display:flex; flex-direction:column; gap:12px;">
                 <div>
                   <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
-                    for="source-layout">Input layout</label>
+                    for="source-layout">Chế độ detect</label>
                   <select id="source-layout">
-                    <option value="normal" selected>Normal traffic view</option>
-                    <option value="fisheye">Already fisheye</option>
+                    <option value="normal" selected>Normal — tự convert sang fisheye</option>
+                    <option value="fisheye">Fisheye — detect trực tiếp</option>
                   </select>
+                  <div id="source-layout-hint" style="font-size:9px; color:var(--color-text-info); margin-top:4px; line-height:1.4;"></div>
                 </div>
-                <div>
-                  <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
-                    for="fisheye-enabled">Fisheye preprocess</label>
+                <div style="display:none;">
                   <select id="fisheye-enabled">
-                    <option value="auto">Auto from input layout</option>
+                    <option value="auto" selected>Auto from input layout</option>
                     <option value="true">Force enabled</option>
                     <option value="false">Disable</option>
                   </select>
@@ -299,20 +293,9 @@
                   </div>
                   <input id="iou" type="range" min="0.10" max="0.90" step="0.01" value="{{ "%.2f"|format(default_iou) }}">
                 </div>
-                <div>
-                  <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:2px;">
-                    <label class="metric-label" style="font-size:9.5px; margin-bottom:0;" for="fisheye-strength">Cường độ biến dạng</label>
-                    <span id="fisheye-strength-value" style="color:var(--color-text-info); font-weight:bold;">{{ "%.0f"|format(default_fisheye_strength * 100) }}%</span>
-                  </div>
-                  <input id="fisheye-strength" type="range" min="0.00" max="1.00" step="0.01" value="{{ "%.2f"|format(default_fisheye_strength) }}">
-                </div>
-                <div>
-                  <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:2px;">
-                    <label class="metric-label" style="font-size:9.5px; margin-bottom:0;" for="fisheye-radius">Bán kính ảnh hưởng</label>
-                    <span id="fisheye-radius-value" style="color:var(--color-text-info); font-weight:bold;">{{ "%.0f"|format(default_fisheye_radius * 100) }}%</span>
-                  </div>
-                  <input id="fisheye-radius" type="range" min="0.05" max="1.00" step="0.01" value="{{ "%.2f"|format(default_fisheye_radius) }}">
-                </div>
+                <!-- fisheye-strength và fisheye-radius luôn 1.0, ẩn khỏi UI -->
+                <input type="hidden" id="fisheye-strength" value="1.00">
+                <input type="hidden" id="fisheye-radius" value="1.00">
                 <div id="video-detect-fps-wrap" style="display:none;">
                   <label class="metric-label" style="font-size:9.5px; margin-bottom:4px; display:block;"
                     for="video-detect-fps">Tốc độ detect video (FPS)</label>
@@ -454,6 +437,9 @@
               <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
                 <span style="font-size:10.5px; font-weight:600; color:var(--color-text-tertiary); text-transform:uppercase; letter-spacing:.5px;">
                   <i class="ti ti-activity"></i> Live
+                </span>
+                <span id="live-stat-device" class="badge b-gray" style="font-size:11px; padding:4px 10px;" title="Thiết bị đang chạy inference">
+                  <i class="ti ti-cpu" style="margin-right:4px;"></i>—
                 </span>
                 <span id="live-stat-vehicles" class="badge b-blue" style="font-size:11px; padding:4px 10px;">
                   <i class="ti ti-car" style="margin-right:4px;"></i>0 xe

@@ -14,9 +14,7 @@ export const elements = {
   iou: document.getElementById("iou"),
   iouValue: document.getElementById("iou-value"),
   fisheyeStrength: document.getElementById("fisheye-strength"),
-  fisheyeStrengthValue: document.getElementById("fisheye-strength-value"),
   fisheyeRadius: document.getElementById("fisheye-radius"),
-  fisheyeRadiusValue: document.getElementById("fisheye-radius-value"),
   fisheyeEffect: document.getElementById("fisheye-effect"),
   videoDetectFpsWrap: document.getElementById("video-detect-fps-wrap"),
   videoDetectFps: document.getElementById("video-detect-fps"),
@@ -113,12 +111,6 @@ export function updateControlLabels() {
   }
   if (elements.iou && elements.iouValue) {
     elements.iouValue.textContent = Number(elements.iou.value).toFixed(2);
-  }
-  if (elements.fisheyeStrength && elements.fisheyeStrengthValue) {
-    elements.fisheyeStrengthValue.textContent = `${(Number(elements.fisheyeStrength.value) * 100).toFixed(0)}%`;
-  }
-  if (elements.fisheyeRadius && elements.fisheyeRadiusValue) {
-    elements.fisheyeRadiusValue.textContent = `${(Number(elements.fisheyeRadius.value) * 100).toFixed(0)}%`;
   }
   if (elements.topConf && elements.confidence) {
     elements.topConf.textContent = Number(elements.confidence.value).toFixed(2);

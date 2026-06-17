@@ -98,7 +98,20 @@
       "Bash(\"C:/Users/Admin/AppData/Local/Programs/Python/Python310/python.exe\" -c \"import ast; ast.parse\\(open\\('services/camera_monitor.py',encoding='utf-8'\\).read\\(\\)\\); print\\('camera_monitor.py OK'\\)\")",
       "Bash(taskkill //F //IM python.exe)",
       "Bash(\"C:/Users/Admin/AppData/Local/Programs/Python/Python310/python.exe\" -c \"print\\('stopped'\\)\")",
-      "Bash(\"C:/Users/Admin/AppData/Local/Programs/Python/Python310/python.exe\" app.py)"
+      "Bash(\"C:/Users/Admin/AppData/Local/Programs/Python/Python310/python.exe\" app.py)",
+      "Bash(cd /c/Using/DATN && echo \"=== root files ===\" && ls -la | grep -iE \"docker|\\\\.git\" *)",
+      "Read(//c/c/Using/**)",
+      "Bash(\"C:/Users/Admin/AppData/Local/Programs/Python/Python310/python.exe\" -m pip install -q \"yt-dlp>=2024.8.6\")",
+      "Bash(\"C:/Users/Admin/AppData/Local/Programs/Python/Python310/python.exe\" -c \"import yt_dlp; print\\('yt-dlp', yt_dlp.version.__version__\\)\")",
+      "Bash(gh run *)",
+      "Bash(\"C:/Users/Admin/AppData/Local/Programs/Python/Python310/python.exe\" -c \"from config import Config; print\\('DEFAULT_DEVICE =', repr\\(Config.DEFAULT_DEVICE\\)\\); print\\('EXT_CAM_LIMIT =', Config.EXT_CAM_LIMIT, '| GPU =', Config.EXT_CAM_LIMIT_GPU\\)\")",
+      "Bash(curl -s -m 8 http://34.21.130.178:5000/api/health)",
+      "Bash(curl -s -o /dev/null -w \"http_code=%{http_code} connect_time=%{time_connect}\\\\n\" -m 8 http://34.21.130.178:5000/)",
+      "Bash(curl -s -o /dev/null -w \"http_code=%{http_code}\\\\n\" -m 10 http://34.21.130.178:5000/api/external-camera/status)",
+      "Bash(curl -s -m 10 http://34.21.130.178:5000/api/config)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Admin\\.claude\\projects\\C--Using-DATN\\memory"
     ]
   }
 }

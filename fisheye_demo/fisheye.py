@@ -194,8 +194,9 @@ def apply_fisheye_to_cv2(
     pil_img = Image.fromarray(rgb_array.astype(np.uint8))
     
     result_pil = apply_fisheye(
-        pil_img, strength=strength, radius=radius, 
-        effect=effect, center_x=center_x, center_y=center_y
+        pil_img, strength=strength, radius=radius,
+        effect=effect, center_x=center_x, center_y=center_y,
+        full_frame=True,
     )
     # PIL RGB → OpenCV BGR
     result_bgr = np.array(result_pil)[..., ::-1].copy()

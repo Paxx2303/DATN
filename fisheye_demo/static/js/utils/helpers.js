@@ -25,7 +25,8 @@ export function resolveApplyFisheye(
   if (fisheyeEnabled === "false") return "false";
   if (forLive) return "false";
   if (sourceLayout === "fisheye") return "false";
-  return isFisheyeModel(modelKey) ? "true" : "false";
+  // normal layout: always apply fisheye conversion before detection
+  return "true";
 }
 
 export function normalizeExternalCameraUrl(value) {

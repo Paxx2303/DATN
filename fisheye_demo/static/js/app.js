@@ -184,32 +184,9 @@ async function boot() {
     setToast(`Failed to load system metadata on boot: ${error.message}`);
   }
 
-  // Load example image cards
-  loadExampleStrip();
-
   // Navigate to default Dashboard page
   router.navigate("dash");
 }
-
-async function loadExampleStrip() {
-  const strip = elements.exampleStrip;
-  if (!strip) return;
-  try {
-    const resp = await fetch("/api/examples");
-    const scenarios = await resp.json();
-    strip.innerHTML = scenarios.map(s => `
-      <div class="example-card" title="${s.desc || s.title}" onclick="window._loadExample('${s.key}')">
-        <img src="/api/examples/${s.key}.jpg" alt="${s.title}" loading="lazy">
-        <div class="example-card-label">${s.title}</div>
-      </div>`).join("");
-  } catch (_) { /* silent */ }
-}
-
-// Expose to inline onclick
-window._loadExample = function(scenario) {
-  loadExampleIntoWorkspace(scenario);
-  window.nav("workspace");
-};
 
 // Execute boot when DOM content is fully loaded
 if (document.readyState === "loading") {
