@@ -647,11 +647,6 @@ class ExternalCameraLiveMonitor:
                     if bbox and len(bbox) >= 4:
                         vehicle_boxes.append({"bbox": bbox,
                                               "vehicle_type": d["class_name"]})
-            # Ưu tiên xe TO nhất (gần camera nhất → biển số nhiều pixel nhất → dễ đọc)
-            vehicle_boxes.sort(
-                key=lambda v: (v["bbox"][2] - v["bbox"][0]) * (v["bbox"][3] - v["bbox"][1]),
-                reverse=True,
-            )
             vehicle_boxes = vehicle_boxes[:max(1, int(Config.ALPR_LIVE_MAX_VEH))]
             plates = recognizer.recognize(bgr, vehicle_boxes or None)
         except Exception as exc:
