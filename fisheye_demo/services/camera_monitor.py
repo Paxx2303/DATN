@@ -258,6 +258,7 @@ class ExternalCameraLiveMonitor:
         GPU mode  : parallel inference across up to 4 cameras.
         CPU mode  : sequential inference on 1 camera only.
         """
+        from datetime import datetime
         from services.inference import run_inference
         from fisheye import apply_fisheye
         from speed_estimator import SpeedEstimator
@@ -559,7 +560,6 @@ class ExternalCameraLiveMonitor:
                 worst_cong  = ("high"     if "high"     in cong_levels else
                                "moderate" if "moderate" in cong_levels else "low")
 
-                from datetime import datetime
                 elapsed_ms = (time.time() - cycle_start) * 1000
 
                 self._last_result = {
@@ -730,7 +730,10 @@ class ExternalCameraLiveMonitor:
             "actual_cycle_fps":       self._actual_cycle_fps,
             "interval_seconds":       interval,
             "stream_ready":           bool(self._stream_frames.get("overview")),
-            "last_result":            result,
+            # None (→ JSON null) when no cycle has produced a result yet, so the
+            # frontend's `if (!liveResult)` guard works. An empty {} is truthy in JS
+            # and made the UI render "undefined cameras" + a stale placeholder frame.
+            "last_result":            self._last_result,
             "error":                  self._last_error,
             "speed_summary":          result.get("speed_summary",
                                                   {"avg_kmh": 0.0, "max_kmh": 0.0}),

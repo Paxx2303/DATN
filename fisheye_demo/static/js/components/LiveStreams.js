@@ -385,7 +385,23 @@ function renderExternalCameraLiveStatus(data, options = {}) {
     updateCongestionPanel(null);
   }
 
-  if (!liveResult) return;
+  if (!liveResult) {
+    // Monitor is running but no cycle has produced cameras yet (e.g. the source
+    // URL yielded no snapshots). Surface the status placeholder + reason in the
+    // result area instead of leaving a stale/confusing badge.
+    if (running) {
+      elements.requestId.textContent = "live-monitor";
+      elements.savedResult.textContent = "live snapshot";
+      elements.resultMeta.textContent = data.error ? "no cameras" : "waiting…";
+      renderMedia(
+        elements.resultMedia,
+        "/api/external-camera/snapshot/overview",
+        "image",
+        bust,
+      );
+    }
+    return;
+  }
 
   if (running) return;
 
